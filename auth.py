@@ -1,81 +1,27 @@
 """
 auth.py — Authentification Google SSO pour Budget Familial
-Utilise streamlit-google-auth pour OAuth2
 """
 
 import streamlit as st
-from typing import Optional, Dict
-import os
-
-# Configuration des utilisateurs autorisés (emails Google)
-AUTHORIZED_USERS = [
-    "tchamfong@gmail.com",      # Lionel
-    "ophelie.email@gmail.com",  # Ophélie (à remplacer par le vrai email)
-    # Ajouter d'autres emails si nécessaire
-]
 
 def get_authorized_users() -> list:
-    """Récupère la liste des utilisateurs autorisés depuis les secrets ou config"""
+    """Récupère la liste des utilisateurs autorisés depuis les secrets"""
     try:
         users = st.secrets.get("AUTHORIZED_USERS", "")
         if users:
             return [u.strip().lower() for u in users.split(",")]
     except:
         pass
-    return [u.lower() for u in AUTHORIZED_USERS]
-
-def init_google_auth():
-    """
-    Initialise l'authentification Google OAuth2.
-    Nécessite les secrets:
-    - GOOGLE_CLIENT_ID
-    - GOOGLE_CLIENT_SECRET
-    """
-    try:
-        from streamlit_google_auth import Authenticate
-        
-        authenticator = Authenticate(
-            secret_credentials_path='client_secret.json',
-            cookie_name='budget_familial_auth',
-            cookie_key=st.secrets.get("COOKIE_KEY", "budget_secret_key_2026"),
-            redirect_uri=st.secrets.get("REDIRECT_URI", "http://localhost:8501"),
-        )
-        return authenticator
-    except ImportError:
-        st.error("❌ Module streamlit-google-auth non installé")
-        return None
-    except Exception as e:
-        st.error(f"❌ Erreur d'initialisation OAuth: {e}")
-        return None
-
-def check_authentication() -> Optional[Dict]:
-    """
-    Vérifie l'authentification et retourne les infos utilisateur.
-    Retourne None si non authentifié.
-    """
-    
-    # Mode développement (bypass auth)
-    if os.getenv("DEV_MODE") == "true" or st.secrets.get("DEV_MODE") == "true":
-        return {
-            "email": "tchamfong@gmail.com",
-            "name": "Lionel (Dev Mode)",
-            "picture": None
-        }
-    
-    # Vérifier si déjà authentifié en session
-    if "user_info" in st.session_state and st.session_state.user_info:
-        return st.session_state.user_info
-    
-    return None
+    return ["tchamfong@gmail.com", "ophelie.linde@gmail.com"]
 
 def login_page():
-    """Affiche la page de connexion"""
+    """Affiche la page de connexion Google SSO"""
     
     st.markdown("""
     <style>
         .login-container {
-            max-width: 400px;
-            margin: 100px auto;
+            max-width: 450px;
+            margin: 80px auto;
             padding: 40px;
             background: white;
             border-radius: 20px;
@@ -83,7 +29,7 @@ def login_page():
             text-align: center;
         }
         .login-title {
-            font-size: 2rem;
+            font-size: 2.2rem;
             font-weight: 700;
             color: #1a1a2e;
             margin-bottom: 10px;
@@ -91,117 +37,89 @@ def login_page():
         .login-subtitle {
             color: #666;
             margin-bottom: 30px;
-        }
-        .google-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 12px;
-            background: white;
-            border: 2px solid #e0e0e0;
-            padding: 14px 28px;
-            border-radius: 12px;
             font-size: 1rem;
-            font-weight: 600;
-            color: #333;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-decoration: none;
         }
-        .google-btn:hover {
-            border-color: #4285f4;
-            box-shadow: 0 4px 12px rgba(66,133,244,0.2);
-        }
-        .google-icon {
-            width: 24px;
-            height: 24px;
+        .login-emoji {
+            font-size: 4rem;
+            margin-bottom: 20px;
         }
     </style>
-    """, unsafe_allow_html=True)
     
-    st.markdown("""
     <div class="login-container">
-        <div class="login-title">💰 Budget Familial</div>
+        <div class="login-emoji">💰</div>
+        <div class="login-title">Budget Familial</div>
         <div class="login-subtitle">Connectez-vous avec votre compte Google</div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Bouton de connexion Google
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        try:
-            from streamlit_google_auth import Authenticate
+    # Google OAuth
+    try:
+        from streamlit_oauth import OAuth2Component
+        
+        CLIENT_ID = st.secrets.get("GOOGLE_CLIENT_ID", "")
+        CLIENT_SECRET = st.secrets.get("GOOGLE_CLIENT_SECRET", "")
+        REDIRECT_URI = st.secrets.get("REDIRECT_URI", "https://budget-familial-tchamfong.streamlit.app/")
+        
+        oauth2 = OAuth2Component(
+            client_id=CLIENT_ID,
+            client_secret=CLIENT_SECRET,
+            authorize_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
+            token_endpoint="https://oauth2.googleapis.com/token",
+        )
+        
+        result = oauth2.authorize_button(
+            name="Se connecter avec Google",
+            icon="https://www.google.com/favicon.ico",
+            redirect_uri=REDIRECT_URI,
+            scope="openid email profile",
+            key="google_oauth",
+            extras_params={"prompt": "consent", "access_type": "offline"},
+            use_container_width=True,
+            pkce="S256",
+        )
+        
+        if result and "token" in result:
+            # Récupérer les infos utilisateur
+            import requests
+            access_token = result["token"]["access_token"]
             
-            authenticator = Authenticate(
-                secret_credentials_path='client_secret.json',
-                cookie_name='budget_familial_auth',
-                cookie_key=st.secrets.get("COOKIE_KEY", "budget_secret_key_2026"),
-                redirect_uri=st.secrets.get("REDIRECT_URI", "http://localhost:8501"),
+            user_info_response = requests.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"}
             )
             
-            authenticator.check_authentification()
-            
-            if st.session_state.get('connected'):
-                user_info = st.session_state.get('user_info', {})
-                email = user_info.get('email', '').lower()
+            if user_info_response.status_code == 200:
+                user_info = user_info_response.json()
+                email = user_info.get("email", "").lower()
                 
-                # Vérifier si l'utilisateur est autorisé
+                # Vérifier si autorisé
                 if email in get_authorized_users():
-                    st.session_state.user_info = user_info
+                    st.session_state.user_info = {
+                        "email": email,
+                        "name": user_info.get("name", email.split("@")[0]),
+                        "picture": user_info.get("picture")
+                    }
                     st.session_state.authenticated = True
                     st.rerun()
                 else:
                     st.error(f"⛔ Accès refusé pour {email}")
                     st.info("Seuls les comptes autorisés peuvent accéder à cette application.")
-                    authenticator.logout()
             else:
-                authenticator.login()
+                st.error("Erreur lors de la récupération des informations utilisateur")
                 
-        except ImportError:
-            st.warning("🔧 Mode développement - Auth Google non configurée")
-            
-            # Mode dev avec sélection manuelle
-            dev_email = st.selectbox(
-                "Simuler connexion (dev)",
-                ["tchamfong@gmail.com", "ophelie@gmail.com"]
-            )
-            if st.button("🔓 Connexion Dev", type="primary", use_container_width=True):
-                st.session_state.user_info = {
-                    "email": dev_email,
-                    "name": "Lionel" if "tchamfong" in dev_email else "Ophélie",
-                    "picture": None
-                }
-                st.session_state.authenticated = True
-                st.rerun()
+    except ImportError:
+        st.error("❌ Module streamlit-oauth non installé")
+        st.code("pip install streamlit-oauth")
+    except Exception as e:
+        st.error(f"❌ Erreur OAuth: {e}")
 
 def logout():
     """Déconnexion"""
     st.session_state.user_info = None
     st.session_state.authenticated = False
-    
-    try:
-        from streamlit_google_auth import Authenticate
-        authenticator = Authenticate(
-            secret_credentials_path='client_secret.json',
-            cookie_name='budget_familial_auth',
-            cookie_key=st.secrets.get("COOKIE_KEY", "budget_secret_key_2026"),
-            redirect_uri=st.secrets.get("REDIRECT_URI", "http://localhost:8501"),
-        )
-        authenticator.logout()
-    except:
-        pass
-    
     st.rerun()
 
-def require_auth(func):
-    """Décorateur pour protéger une fonction"""
-    def wrapper(*args, **kwargs):
-        if not st.session_state.get("authenticated"):
-            login_page()
-            st.stop()
-        return func(*args, **kwargs)
-    return wrapper
-
-def get_current_user() -> Optional[Dict]:
+def get_current_user():
     """Retourne l'utilisateur courant"""
     return st.session_state.get("user_info")
 
