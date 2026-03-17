@@ -1,6 +1,6 @@
 """
 auth.py — Authentification Google SSO
-Style Portfolio : Header sombre dégradé + corps clair + accent violet
+Version simplifiée - Streamlit natif uniquement
 """
 
 import streamlit as st
@@ -15,134 +15,33 @@ def get_authorized_users() -> list:
     return ["tchamfong@gmail.com", "ophelie.linde@gmail.com"]
 
 def login_page():
-    """Page de connexion style Portfolio"""
+    """Page de connexion simple et propre"""
     
-    # CSS Style Portfolio
+    # CSS minimal
     st.markdown("""
     <style>
-    /* Import Google Fonts */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
     
-    /* Reset et base */
     .stApp {
-        background: #F8F9FB !important;
-        font-family: 'Inter', sans-serif !important;
+        background: linear-gradient(180deg, #1a1f35 0%, #1a1f35 35%, #F8F9FB 35%) !important;
     }
     
     .main .block-container {
-        padding: 0 !important;
-        max-width: 100% !important;
+        padding-top: 3rem !important;
+        max-width: 500px !important;
     }
     
-    /* Hide Streamlit elements */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* Header hero sombre */
-    .hero-section {
-        background: linear-gradient(135deg, #1a1f35 0%, #2d1f47 50%, #1a2540 100%);
-        padding: 4rem 2rem;
-        text-align: center;
-        border-radius: 0 0 30px 30px;
-        margin-bottom: 2rem;
+    h1 {
+        font-family: 'Inter', sans-serif !important;
+        font-weight: 700 !important;
+        color: #22C55E !important;
+        text-align: center !important;
     }
     
-    .hero-icon {
-        font-size: 3.5rem;
-        margin-bottom: 1rem;
-    }
-    
-    .hero-title {
-        font-family: 'Inter', sans-serif;
-        font-size: 2.5rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, #22C55E 0%, #4ADE80 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        margin: 0 0 0.5rem 0;
-    }
-    
-    .hero-subtitle {
-        color: #94A3B8;
-        font-size: 1.1rem;
-        font-weight: 400;
-    }
-    
-    /* Badges */
-    .badges-container {
-        display: flex;
-        justify-content: center;
-        gap: 0.75rem;
-        margin-top: 1.5rem;
-        flex-wrap: wrap;
-    }
-    
-    .badge {
-        background: rgba(255,255,255,0.1);
-        border: 1px solid rgba(255,255,255,0.15);
-        border-radius: 20px;
-        padding: 0.4rem 1rem;
-        color: #E2E8F0;
-        font-size: 0.85rem;
-        font-weight: 500;
-    }
-    
-    .badge.highlight {
-        background: rgba(34, 197, 94, 0.2);
-        border-color: rgba(34, 197, 94, 0.3);
-        color: #4ADE80;
-    }
-    
-    /* Login card */
-    .login-card {
-        background: white;
-        border-radius: 16px;
-        padding: 2rem;
-        max-width: 400px;
-        margin: 0 auto;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-        border: 1px solid #E5E7EB;
-    }
-    
-    .login-card-title {
-        font-size: 1.2rem;
-        font-weight: 600;
-        color: #1F2937;
-        text-align: center;
-        margin-bottom: 0.5rem;
-    }
-    
-    .login-card-subtitle {
-        font-size: 0.9rem;
-        color: #6B7280;
-        text-align: center;
-        margin-bottom: 1.5rem;
-    }
-    
-    /* Divider */
-    .divider {
-        display: flex;
-        align-items: center;
-        margin: 1.5rem 0;
-        color: #9CA3AF;
-        font-size: 0.85rem;
-    }
-    
-    .divider::before,
-    .divider::after {
-        content: '';
-        flex: 1;
-        height: 1px;
-        background: #E5E7EB;
-    }
-    
-    .divider span {
-        padding: 0 1rem;
-    }
-    
-    /* Button styling - Violet comme le portfolio */
     .stButton > button {
         font-family: 'Inter', sans-serif !important;
         font-weight: 600 !important;
@@ -153,7 +52,6 @@ def login_page():
         border: none !important;
         color: white !important;
         width: 100% !important;
-        transition: all 0.3s ease !important;
         box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3) !important;
     }
     
@@ -161,52 +59,36 @@ def login_page():
         transform: translateY(-2px) !important;
         box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4) !important;
     }
-    
-    /* Footer */
-    .login-footer {
-        text-align: center;
-        color: #9CA3AF;
-        font-size: 0.8rem;
-        margin-top: 2rem;
-        padding-bottom: 2rem;
-    }
-    
-    /* Info boxes */
-    .stAlert {
-        border-radius: 12px !important;
-    }
     </style>
     """, unsafe_allow_html=True)
     
-    # Hero Section (header sombre)
-    st.markdown("""
-    <div class="hero-section">
-        <div class="hero-icon">💰</div>
-        <h1 class="hero-title">Budget Famille TCHAMFONG</h1>
-        <p class="hero-subtitle">Gestion financière intelligente</p>
-        
-        <div class="badges-container">
-            <span class="badge highlight">🔒 Sécurisé</span>
-            <span class="badge">📊 Tableaux de bord</span>
-            <span class="badge">🎯 Objectifs</span>
-            <span class="badge">☁️ Cloud</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # Contenu simple avec Streamlit natif
+    st.write("")
+    st.write("")
     
-    # Login Card (fond blanc)
-    st.markdown("""
-    <div class="login-card">
-        <div class="login-card-title">Bienvenue 👋</div>
-        <div class="login-card-subtitle">Connectez-vous pour accéder à votre espace famille</div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Centrer le bouton OAuth
+    # Centrer le contenu
     col1, col2, col3 = st.columns([1, 2, 1])
+    
     with col2:
-        st.markdown('<div class="divider"><span>Connexion sécurisée</span></div>', unsafe_allow_html=True)
+        st.markdown("<h1 style='font-size: 3rem; margin-bottom: 0;'>💰</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='margin-top: 0;'>Budget Famille TCHAMFONG</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #94A3B8; margin-bottom: 2rem;'>Gestion financière intelligente</p>", unsafe_allow_html=True)
         
+        st.write("")
+        st.write("")
+        
+        # Badges simples avec colonnes Streamlit
+        b1, b2, b3, b4 = st.columns(4)
+        b1.caption("🔒 Sécurisé")
+        b2.caption("📊 Dashboard")
+        b3.caption("🎯 Objectifs")
+        b4.caption("☁️ Cloud")
+        
+        st.write("")
+        st.divider()
+        st.write("")
+        
+        # Google OAuth
         try:
             from streamlit_oauth import OAuth2Component
             
@@ -259,15 +141,11 @@ def login_page():
         except ImportError:
             st.error("❌ Module streamlit-oauth non installé")
         except Exception as e:
-            st.error(f"❌ Erreur de connexion: {e}")
-    
-    # Footer
-    st.markdown("""
-    <div class="login-footer">
-        💰 Budget Famille TCHAMFONG • Streamlit + Airtable<br>
-        <span>Données synchronisées en temps réel</span>
-    </div>
-    """, unsafe_allow_html=True)
+            st.error(f"❌ Erreur: {e}")
+        
+        st.write("")
+        st.write("")
+        st.caption("💰 Budget Famille TCHAMFONG • Streamlit + Airtable")
 
 def logout():
     st.session_state.user_info = None
