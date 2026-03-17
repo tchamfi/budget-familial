@@ -1,6 +1,6 @@
 """
 auth.py — Authentification Google SSO
-100% Streamlit natif - pas de HTML
+Version minimaliste
 """
 
 import streamlit as st
@@ -15,92 +15,72 @@ def get_authorized_users() -> list:
     return ["tchamfong@gmail.com", "ophelie.linde@gmail.com"]
 
 def login_page():
-    """Page de connexion 100% Streamlit natif"""
+    """Page de connexion minimaliste"""
     
-    # Config basique
     st.markdown("""
     <style>
     #MainMenu, footer, header { visibility: hidden; }
-    .block-container { padding-top: 5rem !important; max-width: 600px !important; }
+    .block-container { padding-top: 8rem !important; max-width: 500px !important; }
     </style>
     """, unsafe_allow_html=True)
     
-    # Centrage
-    col1, col2, col3 = st.columns([1, 2, 1])
+    st.title("Budget Famille TCHAMFONG")
+    st.write("Gestion financière")
     
-    with col2:
-        # Header simple
-        st.title("💰 Budget Famille TCHAMFONG")
-        st.caption("Gestion financière intelligente")
+    st.divider()
+    
+    try:
+        from streamlit_oauth import OAuth2Component
         
-        st.write("")
+        CLIENT_ID = st.secrets.get("GOOGLE_CLIENT_ID", "")
+        CLIENT_SECRET = st.secrets.get("GOOGLE_CLIENT_SECRET", "")
+        REDIRECT_URI = st.secrets.get("REDIRECT_URI", "https://budget-familial-tchamfong.streamlit.app/")
         
-        # Badges avec colonnes
-        b1, b2, b3 = st.columns(3)
-        b1.success("🔒 Sécurisé")
-        b2.info("📊 Dashboard")
-        b3.warning("🎯 Objectifs")
+        oauth2 = OAuth2Component(
+            client_id=CLIENT_ID,
+            client_secret=CLIENT_SECRET,
+            authorize_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
+            token_endpoint="https://oauth2.googleapis.com/token",
+        )
         
-        st.write("")
-        st.divider()
-        st.write("")
+        result = oauth2.authorize_button(
+            name="Se connecter avec Google",
+            redirect_uri=REDIRECT_URI,
+            scope="openid email profile",
+            key="google_oauth",
+            extras_params={"prompt": "consent", "access_type": "offline"},
+            pkce="S256",
+            use_container_width=True,
+        )
         
-        # OAuth Google
-        try:
-            from streamlit_oauth import OAuth2Component
+        if result and "token" in result:
+            import requests
+            access_token = result["token"]["access_token"]
             
-            CLIENT_ID = st.secrets.get("GOOGLE_CLIENT_ID", "")
-            CLIENT_SECRET = st.secrets.get("GOOGLE_CLIENT_SECRET", "")
-            REDIRECT_URI = st.secrets.get("REDIRECT_URI", "https://budget-familial-tchamfong.streamlit.app/")
-            
-            oauth2 = OAuth2Component(
-                client_id=CLIENT_ID,
-                client_secret=CLIENT_SECRET,
-                authorize_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
-                token_endpoint="https://oauth2.googleapis.com/token",
+            user_info_response = requests.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"}
             )
             
-            result = oauth2.authorize_button(
-                name="Se connecter avec Google",
-                redirect_uri=REDIRECT_URI,
-                scope="openid email profile",
-                key="google_oauth",
-                extras_params={"prompt": "consent", "access_type": "offline"},
-                pkce="S256",
-                use_container_width=True,
-            )
-            
-            if result and "token" in result:
-                import requests
-                access_token = result["token"]["access_token"]
+            if user_info_response.status_code == 200:
+                user_info = user_info_response.json()
+                email = user_info.get("email", "").lower()
                 
-                user_info_response = requests.get(
-                    "https://www.googleapis.com/oauth2/v2/userinfo",
-                    headers={"Authorization": f"Bearer {access_token}"}
-                )
-                
-                if user_info_response.status_code == 200:
-                    user_info = user_info_response.json()
-                    email = user_info.get("email", "").lower()
+                if email in get_authorized_users():
+                    st.session_state.user_info = {
+                        "email": email,
+                        "name": user_info.get("name", email.split("@")[0]),
+                        "picture": user_info.get("picture")
+                    }
+                    st.session_state.authenticated = True
+                    st.rerun()
+                else:
+                    st.error(f"Accès non autorisé pour {email}")
                     
-                    if email in get_authorized_users():
-                        st.session_state.user_info = {
-                            "email": email,
-                            "name": user_info.get("name", email.split("@")[0]),
-                            "picture": user_info.get("picture")
-                        }
-                        st.session_state.authenticated = True
-                        st.rerun()
-                    else:
-                        st.error(f"⛔ Accès non autorisé pour {email}")
-                        
-        except ImportError:
-            st.error("❌ Module streamlit-oauth non installé")
-        except Exception as e:
-            st.error(f"❌ Erreur: {e}")
-        
-        st.write("")
-        st.caption("💰 Budget Famille TCHAMFONG • Streamlit + Airtable")
+    except ImportError:
+        st.error("Module streamlit-oauth non installé")
+    except Exception as e:
+        st.error(f"Erreur: {e}")
 
 def logout():
     st.session_state.user_info = None
