@@ -1,6 +1,6 @@
 """
 app-budget.py — Budget Famille TCHAMFONG
-Style Portfolio avec composants Streamlit natifs
+100% Streamlit natif - propre et fonctionnel
 """
 
 import streamlit as st
@@ -23,124 +23,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# === CSS STYLE PORTFOLIO ===
+# CSS minimal
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-* { font-family: 'Inter', sans-serif !important; }
-
-.stApp { background: #F8F9FB !important; }
-
 #MainMenu, footer, header { visibility: hidden; }
-
-.main .block-container {
-    padding: 0 2rem 2rem 2rem !important;
-    max-width: 1400px !important;
-}
-
-/* Tabs style portfolio */
-.stTabs [data-baseweb="tab-list"] {
-    background: white !important;
-    border-radius: 16px !important;
-    padding: 0.5rem !important;
-    gap: 0.5rem !important;
-    border: 1px solid #E5E7EB !important;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06) !important;
-}
-
-.stTabs [data-baseweb="tab"] {
-    font-weight: 600 !important;
-    color: #6B7280 !important;
-    background: transparent !important;
-    border-radius: 12px !important;
-    padding: 0.75rem 1.5rem !important;
-}
-
-.stTabs [data-baseweb="tab"]:hover {
-    color: #1F2937 !important;
-    background: #F3F4F6 !important;
-}
-
-.stTabs [aria-selected="true"] {
-    background: linear-gradient(135deg, #8B5CF6 0%, #A855F7 100%) !important;
-    color: white !important;
-}
-
-/* Boutons */
-.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #8B5CF6 0%, #A855F7 100%) !important;
-    border: none !important;
-    color: white !important;
-    font-weight: 600 !important;
-    border-radius: 10px !important;
-    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3) !important;
-}
-
-.stButton > button[kind="secondary"] {
-    background: white !important;
-    border: 1px solid #E5E7EB !important;
-    color: #6B7280 !important;
-    font-weight: 500 !important;
-    border-radius: 10px !important;
-}
-
-.stButton > button[kind="secondary"]:hover {
-    border-color: #8B5CF6 !important;
-    color: #8B5CF6 !important;
-}
-
-/* Inputs */
-.stNumberInput input, .stTextInput input, .stTextArea textarea {
-    background: white !important;
-    border: 1px solid #E5E7EB !important;
-    border-radius: 10px !important;
-}
-
-.stNumberInput input:focus, .stTextInput input:focus {
-    border-color: #8B5CF6 !important;
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1) !important;
-}
-
-/* Expanders */
-.streamlit-expanderHeader {
-    background: white !important;
-    border: 1px solid #E5E7EB !important;
-    border-radius: 12px !important;
-    font-weight: 600 !important;
-}
-
-.streamlit-expanderContent {
-    background: #FAFBFC !important;
-    border: 1px solid #E5E7EB !important;
-    border-top: none !important;
-}
-
-/* Metrics */
-[data-testid="stMetricValue"] {
-    font-weight: 700 !important;
-    color: #22C55E !important;
-}
-
-[data-testid="stMetricLabel"] {
-    font-weight: 600 !important;
-    color: #6B7280 !important;
-    text-transform: uppercase !important;
-    font-size: 0.75rem !important;
-}
-
-/* Alerts */
-.stSuccess { background: #ECFDF5 !important; border: 1px solid #A7F3D0 !important; border-radius: 12px !important; }
-.stWarning { background: #FFFBEB !important; border: 1px solid #FDE68A !important; border-radius: 12px !important; }
-.stError { background: #FEF2F2 !important; border: 1px solid #FECACA !important; border-radius: 12px !important; }
-.stInfo { background: #EFF6FF !important; border: 1px solid #BFDBFE !important; border-radius: 12px !important; }
-
-/* Progress */
-.stProgress > div > div { background: #E5E7EB !important; border-radius: 10px !important; }
-.stProgress > div > div > div { background: linear-gradient(135deg, #22C55E 0%, #4ADE80 100%) !important; border-radius: 10px !important; }
-
-/* Divider */
-hr { border: none !important; height: 1px !important; background: #E5E7EB !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -161,10 +47,10 @@ if not is_authenticated():
 # === STATE ===
 if "annee" not in st.session_state:
     st.session_state.annee = 2026
-if "show_add_charge_modal" not in st.session_state:
-    st.session_state.show_add_charge_modal = False
-if "delete_charge_info" not in st.session_state:
-    st.session_state.delete_charge_info = None
+if "show_add_charge" not in st.session_state:
+    st.session_state.show_add_charge = False
+if "delete_info" not in st.session_state:
+    st.session_state.delete_info = None
 if "categories" not in st.session_state:
     st.session_state.categories = DEFAULT_CATEGORIES.copy()
 
@@ -201,8 +87,8 @@ def delete_charge_for_months(charge_id, mois_list, annee, delete_all=False):
             if cid == charge_id and f.get("mois") in mois_list and f.get("annee") == annee:
                 _delete_record("Charges_Montants", rec["id"])
 
-def check_category_empty(categorie, charges, exclude_charge_id=None):
-    return len([ch for ch in charges if ch.get("categorie") == categorie and ch.get("id") != exclude_charge_id]) == 0
+def check_last_in_category(categorie, charges, exclude_id=None):
+    return len([ch for ch in charges if ch.get("categorie") == categorie and ch.get("id") != exclude_id]) == 0
 
 def save_new_epargne(type_ep, beneficiaire, ordre=999):
     return _create_record("Epargne", {"type": type_ep, "beneficiaire": beneficiaire, "ordre": ordre})
@@ -242,43 +128,25 @@ user_name = user.get('name', 'User').split()[0] if user else 'User'
 mois_actuel = datetime.now().month if ANNEE == datetime.now().year else 12
 
 # ========================================
-# HEADER SOMBRE STYLE PORTFOLIO
+# HEADER
 # ========================================
-st.markdown(f"""
-<div style="
-    background: linear-gradient(135deg, #1a1f35 0%, #2d1f47 50%, #1a2540 100%);
-    padding: 1.5rem 2rem;
-    border-radius: 0 0 24px 24px;
-    margin: -6rem -2rem 1.5rem -2rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-">
-    <div>
-        <h1 style="
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #22C55E;
-            margin: 0;
-        ">💰 Budget Famille TCHAMFONG</h1>
-        <p style="color: #94A3B8; font-size: 0.9rem; margin: 0.25rem 0 0 0;">Exercice {ANNEE}</p>
-    </div>
-    <div style="display: flex; align-items: center; gap: 1rem;">
-        <span style="color: #E2E8F0; font-size: 0.9rem;">👤 {user_name}</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# Contrôles header
-col1, col2, col3 = st.columns([8, 1, 1])
-with col2:
-    new_annee = st.selectbox("", [2026, 2027, 2028, 2029, 2030], index=0, label_visibility="collapsed")
+h1, h2, h3, h4 = st.columns([4, 1, 1, 1])
+with h1:
+    st.title("💰 Budget Famille TCHAMFONG")
+    st.caption(f"Exercice {ANNEE} • Connecté : {user_name}")
+with h2:
+    new_annee = st.selectbox("Année", [2026, 2027, 2028, 2029, 2030], index=0, label_visibility="collapsed")
     if new_annee != st.session_state.annee:
         st.session_state.annee = new_annee
         refresh()
-with col3:
-    if st.button("Déconnexion", type="secondary"):
+with h3:
+    if st.button("🔄 Rafraîchir"):
+        refresh()
+with h4:
+    if st.button("🚪 Déconnexion"):
         logout()
+
+st.divider()
 
 # ========================================
 # KPIs
@@ -294,22 +162,22 @@ k1, k2, k3, k4, k5 = st.columns(5)
 k1.metric("💵 Revenus", fmt(total_rev))
 k2.metric("💸 Charges", fmt(total_ch))
 k3.metric("🏦 Épargne", fmt(total_ep))
-k4.metric("💰 Reste", fmt(solde))
-k5.metric("📊 Taux", f"{taux:.1f}%")
+k4.metric("💰 Reste à vivre", fmt(solde))
+k5.metric("📊 Taux épargne", f"{taux:.1f}%")
 
 st.divider()
 
 # ========================================
 # TABS
 # ========================================
-tabs = st.tabs(["📊 DASHBOARD", "💵 REVENUS", "💸 CHARGES", "🏦 ÉPARGNE", "⚙️ PARAMÈTRES"])
+tabs = st.tabs(["📊 Dashboard", "💵 Revenus", "💸 Charges", "🏦 Épargne", "⚙️ Paramètres"])
 
 # === TAB 1: DASHBOARD ===
 with tabs[0]:
     col1, col2 = st.columns([1.5, 1])
     
     with col1:
-        st.markdown("#### 📈 Évolution mensuelle")
+        st.subheader("📈 Évolution mensuelle")
         chart_data = []
         for m in range(1, 13):
             r = next((x for x in data["revenus"] if x.get("mois") == m), {"lionel": 0, "ophelie": 0})
@@ -323,7 +191,7 @@ with tabs[0]:
         st.bar_chart(df.set_index("Mois"), height=350, color=["#22C55E", "#EF4444", "#8B5CF6"])
     
     with col2:
-        st.markdown("#### 🎯 Objectifs")
+        st.subheader("🎯 Objectifs épargne")
         for ep in data["epargne"]:
             key = f"{ep.get('type')} {ep.get('beneficiaire')}"
             cumul = sum(e.get("montant", 0) for e in data["epargne_m"] if e.get("epargne_id") == ep.get("id"))
@@ -334,107 +202,138 @@ with tabs[0]:
                 st.progress(min(1.0, cumul / objectif), text=f"{fmt(cumul)} / {fmt(objectif)}")
         
         st.divider()
-        st.markdown("#### 📋 Bilan annuel")
+        st.subheader("📋 Bilan annuel")
         tr = sum(r.get("lionel",0)+r.get("ophelie",0) for r in data["revenus"])
         tc = sum(c.get("lionel",0)+c.get("ophelie",0) for c in data["charges_m"])
         te = sum(e.get("montant",0) for e in data["epargne_m"])
-        st.write(f"**Revenus:** {fmt(tr)} | **Charges:** {fmt(tc)} | **Épargne:** {fmt(te)}")
+        st.write(f"**Revenus:** {fmt(tr)}")
+        st.write(f"**Charges:** {fmt(tc)}")
+        st.write(f"**Épargne:** {fmt(te)}")
         st.write(f"**Solde:** {fmt(tr-tc-te)}")
 
 # === TAB 2: REVENUS ===
 with tabs[1]:
-    st.markdown("#### 💵 Revenus mensuels")
+    st.subheader("💵 Revenus mensuels")
+    
     mois_rev = st.selectbox("Mois", range(1,13), format_func=lambda x: MOIS[x-1], index=mois_actuel-1, key="rev_mois")
     rev_data = next((r for r in data["revenus"] if r.get("mois") == mois_rev), None)
     
     c1, c2 = st.columns(2)
     with c1:
         st.write("**👨 Lionel**")
-        lionel = st.number_input("€", value=float(rev_data.get("lionel", 0)) if rev_data else 0.0, step=100.0, key="rev_l", label_visibility="collapsed")
+        lionel = st.number_input("Montant €", value=float(rev_data.get("lionel", 0)) if rev_data else 0.0, step=100.0, key="rev_l", label_visibility="collapsed")
     with c2:
         st.write("**👩 Ophélie**")
-        ophelie = st.number_input("€", value=float(rev_data.get("ophelie", 0)) if rev_data else 0.0, step=100.0, key="rev_o", label_visibility="collapsed")
+        ophelie = st.number_input("Montant €", value=float(rev_data.get("ophelie", 0)) if rev_data else 0.0, step=100.0, key="rev_o", label_visibility="collapsed")
     
     st.info(f"**Total: {fmt(lionel + ophelie)}**")
-    if st.button("✓ Enregistrer", type="primary", key="save_rev"):
+    
+    if st.button("✅ Enregistrer les revenus", type="primary", key="save_rev"):
         save_revenu(mois_rev, ANNEE, lionel, ophelie, rev_data.get("id") if rev_data else None)
-        st.success("✅ OK!")
+        st.success("Revenus enregistrés !")
         refresh()
 
 # === TAB 3: CHARGES ===
 with tabs[2]:
-    st.markdown("#### 💸 Charges mensuelles")
+    st.subheader("💸 Charges mensuelles")
     
+    # Header
     ch1, ch2 = st.columns([3, 1])
     with ch1:
         mois_ch = st.selectbox("Mois", range(1,13), format_func=lambda x: MOIS[x-1], index=mois_actuel-1, key="ch_mois")
     with ch2:
-        if st.button("➕ Ajouter", type="primary", use_container_width=True):
-            st.session_state.show_add_charge_modal = True
+        if st.button("➕ Ajouter une charge", type="primary", use_container_width=True):
+            st.session_state.show_add_charge = True
     
-    # Modal ajout
-    if st.session_state.show_add_charge_modal:
-        with st.container():
-            st.markdown("##### ➕ Nouvelle charge")
-            c1, c2 = st.columns(2)
-            with c1:
-                cat_opts = st.session_state.categories + ["➕ Nouvelle..."]
-                sel_cat = st.selectbox("Catégorie", cat_opts, key="add_cat")
-                if sel_cat == "➕ Nouvelle...":
-                    new_cat = st.text_input("Nom catégorie", key="new_cat")
-                    final_cat = new_cat.upper() if new_cat else ""
-                else:
-                    final_cat = sel_cat
-                new_desc = st.text_input("Description", key="add_desc")
-                new_compte = st.selectbox("Compte", ["Commun", "Perso"], key="add_compte")
-            with c2:
-                sel_mois = st.multiselect("Mois", range(1,13), format_func=lambda x: MOIS[x-1], default=[mois_ch], key="add_mois")
-                if st.checkbox("Tous les mois", key="add_all"):
-                    sel_mois = list(range(1, 13))
-                add_l = st.number_input("Lionel €", min_value=0.0, step=10.0, key="add_l")
-                add_o = st.number_input("Ophélie €", min_value=0.0, step=10.0, key="add_o")
-            
-            b1, b2, _ = st.columns([1, 1, 2])
-            with b1:
-                if st.button("✓ Ajouter", type="primary", key="confirm_add"):
-                    if new_desc and final_cat and sel_mois:
-                        save_new_charge(final_cat, new_desc, new_compte, sel_mois, ANNEE, add_l, add_o)
-                        st.session_state.show_add_charge_modal = False
-                        refresh()
-            with b2:
-                if st.button("Annuler", key="cancel_add"):
-                    st.session_state.show_add_charge_modal = False
-                    st.rerun()
-            st.divider()
-    
-    # Modal suppression
-    if st.session_state.delete_charge_info:
-        ch = st.session_state.delete_charge_info["charge"]
-        st.warning(f"🗑️ Supprimer: **{ch.get('description')}**")
-        del_opt = st.radio("", [f"Ce mois ({MOIS[mois_ch-1]})", "Tous les mois", "Complètement"], key="del_opt", horizontal=True)
+    # === FORMULAIRE AJOUT ===
+    if st.session_state.show_add_charge:
+        st.divider()
+        st.subheader("➕ Nouvelle charge")
         
-        if check_category_empty(ch.get("categorie"), data["charges"], ch.get("id")):
-            st.info(f"ℹ️ Dernière charge de '{ch.get('categorie')}'")
+        c1, c2 = st.columns(2)
+        with c1:
+            cat_opts = st.session_state.categories + ["➕ Créer nouvelle catégorie"]
+            sel_cat = st.selectbox("Catégorie", cat_opts, key="add_cat")
+            
+            if sel_cat == "➕ Créer nouvelle catégorie":
+                new_cat = st.text_input("Nom de la nouvelle catégorie", key="new_cat")
+                final_cat = new_cat.upper() if new_cat else ""
+            else:
+                final_cat = sel_cat
+            
+            new_desc = st.text_input("Description de la charge", key="add_desc")
+            new_compte = st.selectbox("Compte", ["Commun", "Perso"], key="add_compte")
+        
+        with c2:
+            sel_mois = st.multiselect("Mois concernés", range(1,13), format_func=lambda x: MOIS[x-1], default=[mois_ch], key="add_mois")
+            all_months = st.checkbox("✅ Appliquer à tous les mois de l'année", key="add_all")
+            if all_months:
+                sel_mois = list(range(1, 13))
+            
+            add_l = st.number_input("Montant Lionel €", min_value=0.0, step=10.0, key="add_l")
+            add_o = st.number_input("Montant Ophélie €", min_value=0.0, step=10.0, key="add_o")
+        
+        b1, b2, _ = st.columns([1, 1, 2])
+        with b1:
+            if st.button("✅ Ajouter", type="primary", key="confirm_add"):
+                if new_desc and final_cat and sel_mois:
+                    save_new_charge(final_cat, new_desc, new_compte, sel_mois, ANNEE, add_l, add_o)
+                    st.success(f"Charge '{new_desc}' ajoutée pour {len(sel_mois)} mois !")
+                    st.session_state.show_add_charge = False
+                    refresh()
+                else:
+                    st.warning("Veuillez remplir tous les champs")
+        with b2:
+            if st.button("❌ Annuler", key="cancel_add"):
+                st.session_state.show_add_charge = False
+                st.rerun()
+        
+        st.divider()
+    
+    # === FORMULAIRE SUPPRESSION ===
+    if st.session_state.delete_info:
+        ch = st.session_state.delete_info["charge"]
+        
+        st.divider()
+        st.subheader(f"🗑️ Supprimer : {ch.get('description')}")
+        
+        del_opt = st.radio(
+            "Que voulez-vous supprimer ?",
+            [
+                f"Uniquement pour {MOIS[mois_ch-1]} {ANNEE}",
+                f"Pour tous les mois de {ANNEE}",
+                "Supprimer complètement la charge"
+            ],
+            key="del_opt"
+        )
+        
+        if check_last_in_category(ch.get("categorie"), data["charges"], ch.get("id")):
+            st.warning(f"⚠️ C'est la dernière charge de la catégorie '{ch.get('categorie')}'. Elle sera vide après suppression.")
         
         d1, d2, _ = st.columns([1, 1, 2])
         with d1:
-            if st.button("🗑️ Confirmer", type="primary", key="confirm_del"):
-                if "Ce mois" in del_opt:
+            if st.button("🗑️ Confirmer la suppression", type="primary", key="confirm_del"):
+                if "Uniquement" in del_opt:
                     delete_charge_for_months(ch.get("id"), [mois_ch], ANNEE)
-                elif "Tous" in del_opt:
+                    st.success(f"Supprimé pour {MOIS[mois_ch-1]}")
+                elif "tous les mois" in del_opt:
                     delete_charge_for_months(ch.get("id"), list(range(1,13)), ANNEE)
+                    st.success("Supprimé pour tous les mois")
                 else:
                     delete_charge_for_months(ch.get("id"), [], ANNEE, True)
-                st.session_state.delete_charge_info = None
+                    st.success("Charge supprimée définitivement")
+                st.session_state.delete_info = None
                 refresh()
         with d2:
-            if st.button("Annuler", key="cancel_del"):
-                st.session_state.delete_charge_info = None
+            if st.button("❌ Annuler", key="cancel_del"):
+                st.session_state.delete_info = None
                 st.rerun()
+        
         st.divider()
     
-    # Liste charges
+    # === LISTE DES CHARGES ===
     total_gen = 0
+    
     for cat in st.session_state.categories:
         charges_cat = [ch for ch in data["charges"] if ch.get("categorie") == cat]
         if not charges_cat:
@@ -448,70 +347,126 @@ with tabs[2]:
         total_gen += cat_total
         
         with st.expander(f"📁 {cat} — {fmt(cat_total)}", expanded=True):
+            # Header
+            hc1, hc2, hc3, hc4, hc5 = st.columns([3, 1.5, 1.5, 1, 1])
+            hc1.write("**Charge**")
+            hc2.write("**Lionel €**")
+            hc3.write("**Ophélie €**")
+            hc4.write("**Total**")
+            hc5.write("**Actions**")
+            
             for ch in charges_cat:
                 m = next((x for x in data["charges_m"] if x.get("charge_id") == ch.get("id") and x.get("mois") == mois_ch), {"lionel": 0, "ophelie": 0, "id": None})
-                c1, c2, c3, c4, c5 = st.columns([3, 1.5, 1.5, 1, 0.8])
-                c1.write(f"**{ch.get('description', '')}**")
+                
+                c1, c2, c3, c4, c5 = st.columns([3, 1.5, 1.5, 1, 1])
+                c1.write(ch.get('description', ''))
                 nl = c2.number_input("L", value=float(m.get("lionel", 0)), step=10.0, key=f"l_{ch.get('id')}", label_visibility="collapsed")
                 no = c3.number_input("O", value=float(m.get("ophelie", 0)), step=10.0, key=f"o_{ch.get('id')}", label_visibility="collapsed")
                 c4.write(f"**{fmt(nl + no)}**")
+                
                 with c5:
                     sc, dc = st.columns(2)
-                    if sc.button("✓", key=f"s_{ch.get('id')}"):
+                    if sc.button("💾", key=f"s_{ch.get('id')}", help="Sauvegarder"):
                         save_charge_montant(ch.get("id"), mois_ch, ANNEE, nl, no, m.get("id"))
+                        st.toast("Sauvegardé ✅")
                         refresh()
-                    if dc.button("🗑", key=f"d_{ch.get('id')}"):
-                        st.session_state.delete_charge_info = {"charge": ch}
+                    if dc.button("🗑️", key=f"d_{ch.get('id')}", help="Supprimer"):
+                        st.session_state.delete_info = {"charge": ch}
                         st.rerun()
     
-    st.markdown(f"### Total: **{fmt(total_gen)}**")
+    st.divider()
+    st.subheader(f"Total charges : {fmt(total_gen)}")
 
 # === TAB 4: ÉPARGNE ===
 with tabs[3]:
-    st.markdown("#### 🏦 Épargne")
+    st.subheader("🏦 Épargne mensuelle")
+    
     mois_ep = st.selectbox("Mois", range(1,13), format_func=lambda x: MOIS[x-1], index=mois_actuel-1, key="ep_mois")
     
-    with st.expander("➕ Ajouter"):
+    with st.expander("➕ Ajouter un nouveau type d'épargne"):
         e1, e2, e3 = st.columns(3)
-        nt = e1.text_input("Type")
+        nt = e1.text_input("Type (ex: PEA, LDD)")
         nb = e2.text_input("Bénéficiaire")
-        no = e3.number_input("Objectif €", min_value=0.0, step=100.0)
-        if st.button("✓ Ajouter", type="primary", key="add_ep"):
+        no_obj = e3.number_input("Objectif annuel €", min_value=0.0, step=100.0)
+        
+        if st.button("✅ Ajouter", type="primary", key="add_ep"):
             if nt and nb:
                 eid = save_new_epargne(nt, nb)
-                if eid and no > 0:
-                    save_objectif(f"{nt} {nb}", no)
+                if eid and no_obj > 0:
+                    save_objectif(f"{nt} {nb}", no_obj)
+                st.success("Type d'épargne ajouté !")
                 refresh()
+            else:
+                st.warning("Remplir type et bénéficiaire")
     
-    for ep in data["epargne"]:
-        m = next((x for x in data["epargne_m"] if x.get("epargne_id") == ep.get("id") and x.get("mois") == mois_ep), {"montant": 0, "id": None})
-        c1, c2, c3, c4 = st.columns([3, 1.5, 0.5, 0.5])
-        c1.write(f"**{ep.get('type')}** — {ep.get('beneficiaire')}")
-        val = c2.number_input("€", value=float(m.get("montant", 0)), step=50.0, key=f"ep_{ep.get('id')}", label_visibility="collapsed")
-        if c3.button("✓", key=f"sep_{ep.get('id')}"):
-            save_epargne_montant(ep.get("id"), mois_ep, ANNEE, val, m.get("id"))
-            refresh()
-        if c4.button("🗑", key=f"dep_{ep.get('id')}"):
-            delete_epargne(ep.get("id"))
-            refresh()
+    st.divider()
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write("**💰 Montants mensuels**")
+        total_ep_mois = 0
+        
+        for ep in data["epargne"]:
+            m = next((x for x in data["epargne_m"] if x.get("epargne_id") == ep.get("id") and x.get("mois") == mois_ep), {"montant": 0, "id": None})
+            total_ep_mois += m.get("montant", 0)
+            
+            c1, c2, c3, c4 = st.columns([3, 1.5, 0.5, 0.5])
+            c1.write(f"{ep.get('type')} — {ep.get('beneficiaire')}")
+            val = c2.number_input("€", value=float(m.get("montant", 0)), step=50.0, key=f"ep_{ep.get('id')}", label_visibility="collapsed")
+            if c3.button("💾", key=f"sep_{ep.get('id')}"):
+                save_epargne_montant(ep.get("id"), mois_ep, ANNEE, val, m.get("id"))
+                st.toast("Sauvegardé ✅")
+                refresh()
+            if c4.button("🗑️", key=f"dep_{ep.get('id')}"):
+                delete_epargne(ep.get("id"))
+                st.toast("Supprimé")
+                refresh()
+        
+        st.info(f"**Total: {fmt(total_ep_mois)}**")
+    
+    with col2:
+        st.write("**🎯 Objectifs annuels**")
+        
+        for ep in data["epargne"]:
+            key = f"{ep.get('type')} {ep.get('beneficiaire')}"
+            obj = data["objectifs"].get(key, {})
+            obj_val = obj.get("objectif", 0) if isinstance(obj, dict) else 0
+            obj_id = obj.get("id") if isinstance(obj, dict) else None
+            
+            c1, c2, c3 = st.columns([3, 1.5, 0.5])
+            c1.write(key)
+            nobj = c2.number_input("Obj €", value=float(obj_val), step=100.0, key=f"obj_{ep.get('id')}", label_visibility="collapsed")
+            if c3.button("💾", key=f"sobj_{ep.get('id')}"):
+                save_objectif(key, nobj, obj_id)
+                st.toast("Objectif sauvegardé ✅")
+                refresh()
 
 # === TAB 5: PARAMÈTRES ===
 with tabs[4]:
-    st.markdown("#### ⚙️ Paramètres")
+    st.subheader("⚙️ Paramètres")
+    
     c1, c2 = st.columns(2)
+    
     with c1:
-        st.write("**Utilisateurs autorisés**")
+        st.write("**👥 Utilisateurs autorisés**")
         users = data["config"].get("authorized_users", "")
-        new_users = st.text_area("Emails", value=users, height=100)
-        if st.button("✓ Sauver", type="primary"):
+        new_users = st.text_area("Emails (séparés par des virgules)", value=users, height=100)
+        
+        if st.button("✅ Sauvegarder", type="primary"):
             save_config("authorized_users", new_users, data["config"].get("_record_ids", {}).get("authorized_users"))
+            st.success("Sauvegardé !")
             refresh()
+    
     with c2:
-        st.write("**Infos**")
-        st.write(f"Email: {user.get('email', '') if user else 'N/A'}")
-        st.write(f"Année: {ANNEE}")
-        st.write(f"Charges: {len(data['charges'])} | Épargnes: {len(data['epargne'])}")
-        if st.button("🔄 Rafraîchir"):
-            refresh()
+        st.write("**ℹ️ Informations**")
+        st.write(f"**Email:** {user.get('email', '') if user else 'N/A'}")
+        st.write(f"**Année:** {ANNEE}")
+        st.write(f"**Mois actuel:** {MOIS[mois_actuel-1]}")
+        st.write(f"**Catégories:** {len(st.session_state.categories)}")
+        st.write(f"**Charges:** {len(data['charges'])}")
+        st.write(f"**Types d'épargne:** {len(data['epargne'])}")
 
-st.markdown("<p style='text-align: center; color: #9CA3AF; font-size: 0.8rem; margin-top: 2rem;'>💰 Budget Famille TCHAMFONG</p>", unsafe_allow_html=True)
+# Footer
+st.divider()
+st.caption("💰 Budget Famille TCHAMFONG • Streamlit + Airtable")
