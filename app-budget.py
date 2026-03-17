@@ -1,429 +1,57 @@
 """
 app-budget.py — Budget Familial
-Design premium, style site vitrine professionnel
+Version corrigée : UI améliorée, onglets visibles, pas de disquette
 """
 
 import streamlit as st
 from datetime import datetime
 import pandas as pd
 
-from auth import is_authenticated, login_page, logout, get_current_user
 from airtable_store import (
     load_revenus, save_revenu,
     load_charges, load_charges_montants, save_charge, save_charge_montant,
     load_epargne, load_epargne_montants, save_epargne_montant,
-    load_objectifs, save_objectif, load_config, save_config
+    load_objectifs, save_objectif, load_config, save_config,
+    _create_record, _delete_record
 )
 
 # === CONFIG ===
 st.set_page_config(
     page_title="Budget Familial",
     page_icon="💰",
-    layout="wide",
-    initial_sidebar_state="collapsed"
+    layout="wide"
 )
 
-# === CSS PREMIUM ===
+# === CSS pour onglets plus visibles ===
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    
-    /* Reset & Base */
-    .stApp {
-        background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-    
-    #MainMenu, footer, header {visibility: hidden;}
-    .stDeployButton {display: none;}
-    
-    .block-container {
-        max-width: 1200px;
-        padding: 2rem 2rem 3rem;
-    }
-    
-    /* Header Bar */
-    .header-bar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2rem;
-        padding-bottom: 1.5rem;
-        border-bottom: 1px solid #e2e8f0;
-    }
-    
-    .logo-section {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-    }
-    
-    .logo-icon {
-        width: 48px;
-        height: 48px;
-        background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
-    }
-    
-    .logo-text h1 {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #1e293b;
-        margin: 0;
-        line-height: 1.2;
-    }
-    
-    .logo-text p {
-        font-size: 0.85rem;
-        color: #64748b;
-        margin: 0;
-    }
-    
-    .header-right {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-    }
-    
-    .user-info {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 8px 16px;
-        background: #f1f5f9;
-        border-radius: 24px;
-    }
-    
-    .user-avatar {
-        width: 32px;
-        height: 32px;
-        background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-weight: 600;
-        font-size: 0.85rem;
-    }
-    
-    .user-name {
-        font-weight: 500;
-        color: #334155;
-        font-size: 0.9rem;
-    }
-    
-    /* KPI Section */
-    .kpi-section {
-        display: grid;
-        grid-template-columns: repeat(5, 1fr);
-        gap: 20px;
-        margin-bottom: 2rem;
-    }
-    
-    @media (max-width: 1100px) {
-        .kpi-section { grid-template-columns: repeat(3, 1fr); }
-    }
-    
-    @media (max-width: 700px) {
-        .kpi-section { grid-template-columns: repeat(2, 1fr); }
-    }
-    
-    .kpi-card {
-        background: white;
-        border-radius: 16px;
-        padding: 24px;
-        border: 1px solid #e2e8f0;
-        transition: all 0.2s ease;
-    }
-    
-    .kpi-card:hover {
-        border-color: #cbd5e1;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-    }
-    
-    .kpi-header {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 12px;
-    }
-    
-    .kpi-icon {
-        width: 36px;
-        height: 36px;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.1rem;
-    }
-    
-    .kpi-icon.green { background: #dcfce7; }
-    .kpi-icon.red { background: #fee2e2; }
-    .kpi-icon.blue { background: #dbeafe; }
-    .kpi-icon.purple { background: #f3e8ff; }
-    .kpi-icon.amber { background: #fef3c7; }
-    
-    .kpi-label {
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: #64748b;
-        text-transform: uppercase;
-        letter-spacing: 0.3px;
-    }
-    
-    .kpi-value {
-        font-size: 1.75rem;
-        font-weight: 700;
-        color: #1e293b;
-        margin-top: 4px;
-    }
-    
-    .kpi-value.green { color: #16a34a; }
-    .kpi-value.red { color: #dc2626; }
-    .kpi-value.blue { color: #2563eb; }
-    .kpi-value.purple { color: #7c3aed; }
-    
-    /* Content Grid */
-    .content-grid {
-        display: grid;
-        grid-template-columns: 1.2fr 1fr;
-        gap: 24px;
-        margin-top: 1.5rem;
-    }
-    
-    @media (max-width: 900px) {
-        .content-grid { grid-template-columns: 1fr; }
-    }
-    
-    /* Cards */
-    .card {
-        background: white;
-        border-radius: 16px;
-        padding: 24px;
-        border: 1px solid #e2e8f0;
-    }
-    
-    .card-title {
-        font-size: 1rem;
-        font-weight: 700;
-        color: #1e293b;
-        margin-bottom: 20px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    
-    .card-title-icon {
-        font-size: 1.2rem;
-    }
-    
-    /* Tabs */
+    /* Onglets plus gros et colorés */
     .stTabs [data-baseweb="tab-list"] {
-        background: white;
-        border-radius: 12px;
-        padding: 6px;
-        gap: 4px;
-        border: 1px solid #e2e8f0;
-        width: fit-content;
+        gap: 8px;
+        background-color: #f0f2f6;
+        padding: 8px;
+        border-radius: 10px;
     }
-    
     .stTabs [data-baseweb="tab"] {
+        padding: 12px 24px;
+        font-size: 16px;
         font-weight: 600;
-        font-size: 0.85rem;
-        color: #64748b;
         border-radius: 8px;
-        padding: 10px 18px;
-        background: transparent;
+        background-color: white;
+        border: 2px solid #e0e0e0;
     }
-    
-    .stTabs [data-baseweb="tab"]:hover {
-        background: #f8fafc;
-        color: #334155;
-    }
-    
     .stTabs [aria-selected="true"] {
-        background: #3b82f6 !important;
+        background-color: #4CAF50 !important;
         color: white !important;
+        border-color: #4CAF50 !important;
     }
-    
-    /* Forms - Light theme */
-    .stSelectbox > div > div,
-    .stNumberInput > div > div > input,
-    .stTextInput > div > div > input,
-    .stTextArea textarea {
-        background: white !important;
-        border: 1.5px solid #e2e8f0 !important;
-        border-radius: 10px !important;
-        color: #1e293b !important;
-        font-size: 0.9rem !important;
-    }
-    
-    .stSelectbox > div > div:hover,
-    .stNumberInput > div > div > input:hover,
-    .stTextInput > div > div > input:hover {
-        border-color: #cbd5e1 !important;
-    }
-    
-    .stSelectbox > div > div:focus-within,
-    .stNumberInput > div > div > input:focus,
-    .stTextInput > div > div > input:focus {
-        border-color: #3b82f6 !important;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
-    }
-    
-    /* Dropdown menu - Light */
-    [data-baseweb="popover"] {
-        background: white !important;
-        border: 1px solid #e2e8f0 !important;
-        border-radius: 12px !important;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.1) !important;
-    }
-    
-    [data-baseweb="menu"] {
-        background: white !important;
-    }
-    
-    [role="option"] {
-        color: #1e293b !important;
-        background: white !important;
-    }
-    
-    [role="option"]:hover {
-        background: #f1f5f9 !important;
-    }
-    
-    [aria-selected="true"] {
-        background: #eff6ff !important;
-        color: #2563eb !important;
-    }
-    
-    /* Progress bars */
-    .progress-item {
-        padding: 14px 16px;
-        background: #f8fafc;
-        border-radius: 10px;
-        margin-bottom: 10px;
-    }
-    
-    .progress-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-    }
-    
-    .progress-label {
-        font-weight: 600;
-        color: #334155;
-        font-size: 0.85rem;
-    }
-    
-    .progress-value {
-        font-size: 0.8rem;
-        color: #64748b;
-    }
-    
-    .progress-track {
-        height: 6px;
-        background: #e2e8f0;
-        border-radius: 3px;
-        overflow: hidden;
-    }
-    
-    .progress-fill {
-        height: 100%;
-        border-radius: 3px;
-        transition: width 0.4s ease;
-    }
-    
-    .progress-fill.green { background: linear-gradient(90deg, #22c55e, #4ade80); }
-    .progress-fill.yellow { background: linear-gradient(90deg, #eab308, #facc15); }
-    .progress-fill.red { background: linear-gradient(90deg, #ef4444, #f87171); }
-    
-    /* Buttons */
-    .stButton > button {
-        font-family: 'Inter', sans-serif;
-        font-weight: 600;
-        border-radius: 10px;
-        padding: 8px 20px;
-        font-size: 0.85rem;
-        transition: all 0.2s;
-    }
-    
-    .stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, #3b82f6, #2563eb);
-        border: none;
+    /* Bouton enregistrer plus visible */
+    .save-btn {
+        background-color: #4CAF50;
         color: white;
-    }
-    
-    .stButton > button[kind="primary"]:hover {
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-        transform: translateY(-1px);
-    }
-    
-    .stButton > button[kind="secondary"] {
-        background: white;
-        border: 1.5px solid #e2e8f0;
-        color: #64748b;
-    }
-    
-    .stButton > button[kind="secondary"]:hover {
-        background: #f8fafc;
-        border-color: #cbd5e1;
-    }
-    
-    /* Expander */
-    .streamlit-expanderHeader {
-        background: #f8fafc !important;
-        border-radius: 10px !important;
-        font-weight: 600 !important;
-        color: #334155 !important;
-        border: 1px solid #e2e8f0 !important;
-    }
-    
-    /* Footer */
-    .app-footer {
-        margin-top: 3rem;
-        padding-top: 2rem;
-        border-top: 1px solid #e2e8f0;
-        text-align: center;
-        color: #94a3b8;
-        font-size: 0.85rem;
-    }
-    
-    /* Labels */
-    .stSelectbox label, .stNumberInput label, .stTextInput label {
-        color: #475569 !important;
-        font-weight: 500 !important;
-        font-size: 0.85rem !important;
-    }
-    
-    /* Summary stat */
-    .stat-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 12px 0;
-        border-bottom: 1px solid #f1f5f9;
-    }
-    
-    .stat-row:last-child {
-        border-bottom: none;
-    }
-    
-    .stat-label {
-        color: #64748b;
-        font-size: 0.9rem;
-    }
-    
-    .stat-value {
-        font-weight: 600;
-        color: #1e293b;
+        padding: 4px 12px;
+        border-radius: 4px;
+        font-weight: bold;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -436,6 +64,8 @@ CATEGORIES = ["LOGEMENT", "MAISON", "VOITURE & TRANSPORT", "ABONNEMENTS",
               "SPORT & SANTÉ", "ENFANTS", "ALIMENTAIRE", "LOISIRS", "DEPENSES EXCEPTIONNELLES"]
 
 # === AUTH ===
+from auth import is_authenticated, login_page, logout, get_current_user
+
 if not is_authenticated():
     login_page()
     st.stop()
@@ -445,10 +75,21 @@ if "annee" not in st.session_state:
     st.session_state.annee = 2026
 
 # === HELPERS ===
-def fmt(montant):
-    if montant >= 0:
-        return f"{montant:,.0f} €".replace(",", " ")
-    return f"-{abs(montant):,.0f} €".replace(",", " ")
+def fmt(m):
+    return f"{m:,.0f} €".replace(",", " ")
+
+def save_new_epargne(type_ep, beneficiaire, ordre=999):
+    """Créer un nouveau type d'épargne"""
+    fields = {"type": type_ep, "beneficiaire": beneficiaire, "ordre": ordre}
+    return _create_record("Epargne", fields)
+
+def delete_epargne(epargne_id):
+    """Supprimer un type d'épargne"""
+    return _delete_record("Epargne", epargne_id)
+
+def delete_charge(charge_id):
+    """Supprimer une charge"""
+    return _delete_record("Charges", charge_id)
 
 @st.cache_data(ttl=60)
 def load_data(annee):
@@ -462,6 +103,10 @@ def load_data(annee):
         "config": load_config()
     }
 
+def dedupe(items, key_fn):
+    seen = set()
+    return [x for x in items if not (key_fn(x) in seen or seen.add(key_fn(x)))]
+
 def refresh():
     st.cache_data.clear()
     st.rerun()
@@ -469,233 +114,141 @@ def refresh():
 # === DATA ===
 ANNEE = st.session_state.annee
 data = load_data(ANNEE)
+data["charges"] = dedupe(data["charges"], lambda x: x.get("description", ""))
+data["epargne"] = dedupe(data["epargne"], lambda x: f"{x.get('type')}_{x.get('beneficiaire')}")
+
 user = get_current_user()
-mois_courant = datetime.now().month if ANNEE == datetime.now().year else 12
+mois_actuel = datetime.now().month if ANNEE == datetime.now().year else 12
 
 # === HEADER ===
-col1, col2 = st.columns([3, 1])
-
+col1, col2, col3 = st.columns([4, 1, 1])
 with col1:
-    st.markdown(f"""
-    <div class="logo-section">
-        <div class="logo-icon">💰</div>
-        <div class="logo-text">
-            <h1>Budget Familial</h1>
-            <p>Suivi financier {ANNEE}</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
+    st.title("💰 Budget Familial")
+    st.caption(f"Exercice {ANNEE}")
 with col2:
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        annees = [2026, 2027, 2028, 2029, 2030]
-        new_annee = st.selectbox("Année", annees, index=annees.index(ANNEE) if ANNEE in annees else 0, label_visibility="collapsed")
-        if new_annee != ANNEE:
-            st.session_state.annee = new_annee
-            refresh()
-    with c2:
-        user_initial = user.get('name', 'U')[0].upper()
-        st.markdown(f"""
-        <div class="user-info">
-            <div class="user-avatar">{user_initial}</div>
-            <span class="user-name">{user.get('name', 'Utilisateur')}</span>
-        </div>
-        """, unsafe_allow_html=True)
-
-# Logout button - discret
-_, _, _, logout_col = st.columns([3, 1, 1, 0.5])
-with logout_col:
-    if st.button("↩ Quitter", type="secondary", use_container_width=True):
+    new_annee = st.selectbox("Année", [2026, 2027, 2028, 2029, 2030], index=0, label_visibility="collapsed")
+    if new_annee != st.session_state.annee:
+        st.session_state.annee = new_annee
+        refresh()
+with col3:
+    st.write(f"👤 {user.get('name', 'User').split()[0]}")
+    if st.button("Déconnexion", type="secondary"):
         logout()
 
-st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+st.divider()
 
 # === KPIs ===
-rev = next((r for r in data["revenus"] if r["mois"] == mois_courant), {"lionel": 0, "ophelie": 0})
+rev = next((r for r in data["revenus"] if r.get("mois") == mois_actuel), {"lionel": 0, "ophelie": 0})
 total_rev = rev.get("lionel", 0) + rev.get("ophelie", 0)
-total_charges = sum(c.get("lionel", 0) + c.get("ophelie", 0) for c in data["charges_m"] if c.get("mois") == mois_courant)
-total_epargne = sum(e.get("montant", 0) for e in data["epargne_m"] if e.get("mois") == mois_courant)
-solde = total_rev - total_charges - total_epargne
-taux = (total_epargne / total_rev * 100) if total_rev > 0 else 0
+total_ch = sum(c.get("lionel", 0) + c.get("ophelie", 0) for c in data["charges_m"] if c.get("mois") == mois_actuel)
+total_ep = sum(e.get("montant", 0) for e in data["epargne_m"] if e.get("mois") == mois_actuel)
+solde = total_rev - total_ch - total_ep
+taux = (total_ep / total_rev * 100) if total_rev > 0 else 0
 
-st.markdown(f"""
-<div class="kpi-section">
-    <div class="kpi-card">
-        <div class="kpi-header">
-            <div class="kpi-icon green">💵</div>
-            <span class="kpi-label">Revenus {MOIS[mois_courant-1][:3]}</span>
-        </div>
-        <div class="kpi-value green">{fmt(total_rev)}</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-header">
-            <div class="kpi-icon red">💸</div>
-            <span class="kpi-label">Charges {MOIS[mois_courant-1][:3]}</span>
-        </div>
-        <div class="kpi-value red">{fmt(total_charges)}</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-header">
-            <div class="kpi-icon blue">🏦</div>
-            <span class="kpi-label">Épargne {MOIS[mois_courant-1][:3]}</span>
-        </div>
-        <div class="kpi-value blue">{fmt(total_epargne)}</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-header">
-            <div class="kpi-icon amber">💰</div>
-            <span class="kpi-label">Reste à vivre</span>
-        </div>
-        <div class="kpi-value {'green' if solde >= 0 else 'red'}">{fmt(solde)}</div>
-    </div>
-    <div class="kpi-card">
-        <div class="kpi-header">
-            <div class="kpi-icon purple">📊</div>
-            <span class="kpi-label">Taux épargne</span>
-        </div>
-        <div class="kpi-value purple">{taux:.1f}%</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+k1, k2, k3, k4, k5 = st.columns(5)
+k1.metric("💵 Revenus", fmt(total_rev))
+k2.metric("💸 Charges", fmt(total_ch))
+k3.metric("🏦 Épargne", fmt(total_ep))
+k4.metric("💰 Reste à vivre", fmt(solde))
+k5.metric("📊 Taux épargne", f"{taux:.1f}%")
 
-# === TABS ===
-tabs = st.tabs(["📊 Tableau de bord", "💵 Revenus", "💸 Charges", "🏦 Épargne", "⚙️ Paramètres"])
+st.divider()
 
-# --- TAB 1: DASHBOARD ---
+# === TABS (onglets bien visibles) ===
+tabs = st.tabs([
+    "📊 Tableau de bord", 
+    "💵 Revenus", 
+    "💸 Charges", 
+    "🏦 Épargne", 
+    "⚙️ Paramètres"
+])
+
+# ------ TAB 1: DASHBOARD ------
 with tabs[0]:
-    col1, col2 = st.columns([1.3, 1])
+    col1, col2 = st.columns([1.5, 1])
     
     with col1:
-        st.markdown("""
-        <div class="card">
-            <div class="card-title"><span class="card-title-icon">📈</span> Évolution mensuelle</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
+        st.subheader("📈 Évolution mensuelle")
         chart_data = []
+        # Ordre des mois correct : Janvier -> Décembre
         for m in range(1, 13):
             r = next((x for x in data["revenus"] if x.get("mois") == m), {"lionel": 0, "ophelie": 0})
-            ch = sum(c.get("lionel", 0) + c.get("ophelie", 0) for c in data["charges_m"] if c.get("mois") == m)
-            ep = sum(e.get("montant", 0) for e in data["epargne_m"] if e.get("mois") == m)
+            c = sum(x.get("lionel", 0) + x.get("ophelie", 0) for x in data["charges_m"] if x.get("mois") == m)
+            e = sum(x.get("montant", 0) for x in data["epargne_m"] if x.get("mois") == m)
+            # Mois COMPLET, pas tronqué
             chart_data.append({
-                "Mois": MOIS[m-1][:3], 
-                "Revenus": r.get("lionel", 0) + r.get("ophelie", 0), 
-                "Charges": ch, 
-                "Épargne": ep
+                "Mois": MOIS[m-1], 
+                "Revenus": r.get("lionel",0)+r.get("ophelie",0), 
+                "Charges": c, 
+                "Épargne": e
             })
         
         df = pd.DataFrame(chart_data)
-        st.bar_chart(df.set_index("Mois"), color=["#22c55e", "#ef4444", "#3b82f6"], height=350)
+        # Forcer l'ordre des mois
+        df['Mois'] = pd.Categorical(df['Mois'], categories=MOIS, ordered=True)
+        df = df.sort_values('Mois')
+        st.bar_chart(df.set_index("Mois"), height=350)
     
     with col2:
-        st.markdown("""
-        <div class="card">
-            <div class="card-title"><span class="card-title-icon">🎯</span> Objectifs d'épargne</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        has_objectives = False
+        st.subheader("🎯 Objectifs épargne")
         for ep in data["epargne"]:
+            key = f"{ep.get('type')} {ep.get('beneficiaire')}"
             cumul = sum(e.get("montant", 0) for e in data["epargne_m"] if e.get("epargne_id") == ep.get("id"))
-            obj_key = f"{ep.get('type', '')} {ep.get('beneficiaire', '')}"
-            obj = data["objectifs"].get(obj_key, {})
+            obj = data["objectifs"].get(key, {})
             objectif = obj.get("objectif", 0) if isinstance(obj, dict) else 0
-            
             if objectif > 0:
-                has_objectives = True
-                pct = min(100, cumul / objectif * 100)
-                color = "green" if pct >= 80 else "yellow" if pct >= 50 else "red"
-                st.markdown(f"""
-                <div class="progress-item">
-                    <div class="progress-row">
-                        <span class="progress-label">{obj_key}</span>
-                        <span class="progress-value">{fmt(cumul)} / {fmt(objectif)}</span>
-                    </div>
-                    <div class="progress-track">
-                        <div class="progress-fill {color}" style="width: {pct}%;"></div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                pct = cumul / objectif
+                st.write(f"**{key}**")
+                st.progress(min(1.0, pct), text=f"{fmt(cumul)} / {fmt(objectif)}")
         
-        if not has_objectives:
-            st.info("Définissez vos objectifs dans l'onglet Épargne")
-        
-        # Résumé annuel
-        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
-        st.markdown("""
-        <div class="card">
-            <div class="card-title"><span class="card-title-icon">📋</span> Résumé annuel</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        total_rev_annuel = sum(r.get("lionel", 0) + r.get("ophelie", 0) for r in data["revenus"])
-        total_charges_annuel = sum(c.get("lionel", 0) + c.get("ophelie", 0) for c in data["charges_m"])
-        total_epargne_annuel = sum(e.get("montant", 0) for e in data["epargne_m"])
-        
-        st.markdown(f"""
-        <div class="stat-row">
-            <span class="stat-label">Total revenus</span>
-            <span class="stat-value" style="color: #16a34a;">{fmt(total_rev_annuel)}</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">Total charges</span>
-            <span class="stat-value" style="color: #dc2626;">{fmt(total_charges_annuel)}</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">Total épargne</span>
-            <span class="stat-value" style="color: #2563eb;">{fmt(total_epargne_annuel)}</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">Solde net</span>
-            <span class="stat-value">{fmt(total_rev_annuel - total_charges_annuel - total_epargne_annuel)}</span>
-        </div>
-        """, unsafe_allow_html=True)
+        st.subheader("📋 Bilan annuel")
+        tr = sum(r.get("lionel",0)+r.get("ophelie",0) for r in data["revenus"])
+        tc = sum(c.get("lionel",0)+c.get("ophelie",0) for c in data["charges_m"])
+        te = sum(e.get("montant",0) for e in data["epargne_m"])
+        st.write(f"Revenus : **{fmt(tr)}**")
+        st.write(f"Charges : **{fmt(tc)}**")
+        st.write(f"Épargne : **{fmt(te)}**")
+        st.write(f"Solde : **{fmt(tr-tc-te)}**")
 
-# --- TAB 2: REVENUS ---
+# ------ TAB 2: REVENUS ------
 with tabs[1]:
-    st.markdown("### 💵 Gestion des revenus")
+    st.subheader("💵 Revenus")
     
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        mois_rev = st.selectbox("Mois", range(1, 13), format_func=lambda x: MOIS[x-1], index=mois_courant-1, key="mois_rev")
+    mois_rev = st.selectbox("Sélectionner le mois", range(1,13), format_func=lambda x: MOIS[x-1], index=mois_actuel-1, key="rev_mois")
     
     rev_data = next((r for r in data["revenus"] if r.get("mois") == mois_rev), None)
     
-    st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        lionel = st.number_input("Lionel (€)", value=float(rev_data.get("lionel", 0)) if rev_data else 0.0, step=100.0)
+    with col2:
+        ophelie = st.number_input("Ophélie (€)", value=float(rev_data.get("ophelie", 0)) if rev_data else 0.0, step=100.0)
     
-    c1, c2, c3 = st.columns([1, 1, 1])
-    with c1:
-        lionel = st.number_input("👨 Lionel", value=float(rev_data.get("lionel", 0)) if rev_data else 0.0, step=100.0, format="%.0f")
-    with c2:
-        ophelie = st.number_input("👩 Ophélie", value=float(rev_data.get("ophelie", 0)) if rev_data else 0.0, step=100.0, format="%.0f")
-    with c3:
-        st.markdown(f"<div style='padding-top: 2rem;'><strong>Total : {fmt(lionel + ophelie)}</strong></div>", unsafe_allow_html=True)
+    st.info(f"Total : **{fmt(lionel + ophelie)}**")
     
-    if st.button("💾 Enregistrer les revenus", key="save_rev", type="primary"):
+    if st.button("✓ Enregistrer les revenus", type="primary"):
         save_revenu(mois_rev, ANNEE, lionel, ophelie, rev_data.get("id") if rev_data else None)
         st.success("✅ Revenus enregistrés !")
         refresh()
 
-# --- TAB 3: CHARGES ---
+# ------ TAB 3: CHARGES ------
 with tabs[2]:
-    st.markdown("### 💸 Gestion des charges")
+    st.subheader("💸 Charges")
     
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        mois_ch = st.selectbox("Mois", range(1, 13), format_func=lambda x: MOIS[x-1], index=mois_courant-1, key="mois_ch")
+    mois_ch = st.selectbox("Sélectionner le mois", range(1,13), format_func=lambda x: MOIS[x-1], index=mois_actuel-1, key="ch_mois")
     
+    # Ajouter une charge
     with st.expander("➕ Ajouter une nouvelle charge"):
-        nc1, nc2 = st.columns(2)
-        with nc1:
-            new_cat = st.selectbox("Catégorie", CATEGORIES, key="new_cat")
-            new_desc = st.text_input("Description", key="new_desc")
-        with nc2:
-            new_compte = st.selectbox("Compte", ["Commun", "Perso"], key="new_compte")
-            new_l = st.number_input("Montant Lionel €", min_value=0.0, step=10.0, key="new_l", format="%.0f")
-            new_o = st.number_input("Montant Ophélie €", min_value=0.0, step=10.0, key="new_o", format="%.0f")
+        col1, col2 = st.columns(2)
+        with col1:
+            new_cat = st.selectbox("Catégorie", CATEGORIES)
+            new_desc = st.text_input("Description")
+        with col2:
+            new_compte = st.selectbox("Compte", ["Commun", "Perso"])
+            new_l = st.number_input("Montant Lionel (€)", min_value=0.0, step=10.0, key="add_l")
+            new_o = st.number_input("Montant Ophélie (€)", min_value=0.0, step=10.0, key="add_o")
         
-        if st.button("➕ Ajouter", type="primary", key="add_charge"):
+        if st.button("Ajouter la charge", type="primary"):
             if new_desc:
                 cid = save_charge(new_cat, new_desc, new_compte)
                 if cid:
@@ -703,132 +256,160 @@ with tabs[2]:
                     st.success("✅ Charge ajoutée !")
                     refresh()
     
-    # Grouper par catégorie
-    by_cat = {}
-    for ch in data["charges"]:
-        cat = ch.get("categorie") or ch.get("description", "AUTRE")
-        if cat not in by_cat:
-            by_cat[cat] = []
-        m = next((x for x in data["charges_m"] if x.get("charge_id") == ch.get("id") and x.get("mois") == mois_ch), 
-                 {"lionel": 0, "ophelie": 0, "id": None})
-        by_cat[cat].append({
-            **ch, 
-            "m_l": m.get("lionel", 0), 
-            "m_o": m.get("ophelie", 0), 
-            "m_id": m.get("id")
-        })
+    # En-tête des colonnes
+    st.markdown("---")
+    header_cols = st.columns([3, 1.5, 1.5, 1, 0.5])
+    header_cols[0].markdown("**Charge**")
+    header_cols[1].markdown("**Lionel €**")
+    header_cols[2].markdown("**Ophélie €**")
+    header_cols[3].markdown("**Total**")
+    header_cols[4].markdown("")
+    st.markdown("---")
     
-    for cat, items in by_cat.items():
-        total = sum(i.get("m_l", 0) + i.get("m_o", 0) for i in items)
-        with st.expander(f"📂 {cat} — {fmt(total)}", expanded=True):
-            for item in items:
-                c1, c2, c3, c4 = st.columns([3, 1.5, 1.5, 0.5])
-                with c1:
-                    st.markdown(f"**{item.get('description', '')}**")
-                with c2:
-                    nl = st.number_input("L", value=float(item.get("m_l", 0)), step=10.0, 
-                                        key=f"l_{item.get('id')}_{mois_ch}", label_visibility="collapsed", format="%.0f")
-                with c3:
-                    no = st.number_input("O", value=float(item.get("m_o", 0)), step=10.0, 
-                                        key=f"o_{item.get('id')}_{mois_ch}", label_visibility="collapsed", format="%.0f")
-                with c4:
-                    if st.button("💾", key=f"s_{item.get('id')}_{mois_ch}"):
-                        save_charge_montant(item.get("id"), mois_ch, ANNEE, nl, no, item.get("m_id"))
+    # Afficher par catégorie
+    total_general = 0
+    for cat in CATEGORIES:
+        charges_cat = [ch for ch in data["charges"] if ch.get("categorie") == cat]
+        if not charges_cat:
+            continue
+        
+        cat_total = 0
+        for ch in charges_cat:
+            m = next((x for x in data["charges_m"] if x.get("charge_id") == ch.get("id") and x.get("mois") == mois_ch), {"lionel": 0, "ophelie": 0})
+            cat_total += m.get("lionel", 0) + m.get("ophelie", 0)
+        
+        total_general += cat_total
+        
+        with st.expander(f"📁 {cat} — {fmt(cat_total)}", expanded=True):
+            for ch in charges_cat:
+                m = next((x for x in data["charges_m"] if x.get("charge_id") == ch.get("id") and x.get("mois") == mois_ch), 
+                         {"lionel": 0, "ophelie": 0, "id": None})
+                
+                col1, col2, col3, col4, col5 = st.columns([3, 1.5, 1.5, 1, 0.5])
+                with col1:
+                    st.write(f"**{ch.get('description', '')}**")
+                with col2:
+                    nl = st.number_input("Lionel", value=float(m.get("lionel", 0)), step=10.0, 
+                                        key=f"l_{ch.get('id')}_{mois_ch}", label_visibility="collapsed")
+                with col3:
+                    no = st.number_input("Ophélie", value=float(m.get("ophelie", 0)), step=10.0, 
+                                        key=f"o_{ch.get('id')}_{mois_ch}", label_visibility="collapsed")
+                with col4:
+                    st.write(f"**{fmt(nl + no)}**")
+                with col5:
+                    # Menu avec les actions
+                    action = st.selectbox("", ["", "✓", "🗑"], key=f"act_{ch.get('id')}_{mois_ch}", label_visibility="collapsed")
+                    if action == "✓":
+                        save_charge_montant(ch.get("id"), mois_ch, ANNEE, nl, no, m.get("id"))
                         st.toast("✅ Sauvegardé")
                         refresh()
+                    elif action == "🗑":
+                        delete_charge(ch.get("id"))
+                        st.toast("🗑️ Supprimé")
+                        refresh()
+    
+    st.error(f"**TOTAL CHARGES : {fmt(total_general)}**")
 
-# --- TAB 4: ÉPARGNE ---
+# ------ TAB 4: ÉPARGNE ------
 with tabs[3]:
-    st.markdown("### 🏦 Gestion de l'épargne")
+    st.subheader("🏦 Épargne")
     
-    col1, col2 = st.columns([1, 3])
+    mois_ep = st.selectbox("Sélectionner le mois", range(1,13), format_func=lambda x: MOIS[x-1], index=mois_actuel-1, key="ep_mois")
+    
+    # Ajouter un type d'épargne
+    with st.expander("➕ Ajouter un nouveau type d'épargne"):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            new_type = st.text_input("Type (ex: PEA, LDD, Livret A)")
+        with col2:
+            new_benef = st.text_input("Bénéficiaire (ex: Lionel, Ophélie)")
+        with col3:
+            new_objectif = st.number_input("Objectif annuel (€)", min_value=0.0, step=100.0)
+        
+        if st.button("Ajouter l'épargne", type="primary"):
+            if new_type and new_benef:
+                ep_id = save_new_epargne(new_type, new_benef)
+                if ep_id and new_objectif > 0:
+                    save_objectif(f"{new_type} {new_benef}", new_objectif)
+                st.success("✅ Type d'épargne ajouté !")
+                refresh()
+            else:
+                st.warning("Veuillez remplir le type et le bénéficiaire")
+    
+    col1, col2 = st.columns(2)
+    
     with col1:
-        mois_ep = st.selectbox("Mois", range(1, 13), format_func=lambda x: MOIS[x-1], index=mois_courant-1, key="mois_ep")
-    
-    st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
-    
-    c1, c2 = st.columns(2)
-    
-    with c1:
-        st.markdown("#### 💰 Montants mensuels")
+        st.write("### 💰 Montants mensuels")
+        total_mensuel = 0
         for ep in data["epargne"]:
             m = next((x for x in data["epargne_m"] if x.get("epargne_id") == ep.get("id") and x.get("mois") == mois_ep), 
                      {"montant": 0, "id": None})
-            ec1, ec2, ec3 = st.columns([2, 1.5, 0.5])
-            with ec1:
-                st.markdown(f"**{ep.get('type', '')}** — {ep.get('beneficiaire', '')}")
-            with ec2:
-                val = st.number_input("€", value=float(m.get("montant", 0)), step=50.0, 
-                                     key=f"ep_{ep.get('id')}_{mois_ep}", label_visibility="collapsed", format="%.0f")
-            with ec3:
-                if st.button("💾", key=f"sep_{ep.get('id')}_{mois_ep}"):
+            total_mensuel += m.get("montant", 0)
+            
+            c1, c2, c3 = st.columns([2.5, 1.5, 0.5])
+            with c1:
+                st.write(f"**{ep.get('type')}** — {ep.get('beneficiaire')}")
+            with c2:
+                val = st.number_input("Montant", value=float(m.get("montant", 0)), step=50.0, 
+                                     key=f"ep_{ep.get('id')}_{mois_ep}", label_visibility="collapsed")
+            with c3:
+                action = st.selectbox("", ["", "✓", "🗑"], key=f"act_ep_{ep.get('id')}_{mois_ep}", label_visibility="collapsed")
+                if action == "✓":
                     save_epargne_montant(ep.get("id"), mois_ep, ANNEE, val, m.get("id"))
                     st.toast("✅ Sauvegardé")
                     refresh()
+                elif action == "🗑":
+                    delete_epargne(ep.get("id"))
+                    st.toast("🗑️ Supprimé")
+                    refresh()
+        
+        st.info(f"Total : **{fmt(total_mensuel)}**")
     
-    with c2:
-        st.markdown("#### 🎯 Objectifs annuels")
+    with col2:
+        st.write("### 🎯 Objectifs annuels")
         for ep in data["epargne"]:
-            obj_key = f"{ep.get('type', '')} {ep.get('beneficiaire', '')}"
-            obj = data["objectifs"].get(obj_key, {})
+            key = f"{ep.get('type')} {ep.get('beneficiaire')}"
+            obj = data["objectifs"].get(key, {})
             obj_val = obj.get("objectif", 0) if isinstance(obj, dict) else 0
             obj_id = obj.get("id") if isinstance(obj, dict) else None
             
-            oc1, oc2, oc3 = st.columns([2, 1.5, 0.5])
-            with oc1:
-                st.markdown(f"**{obj_key}**")
-            with oc2:
-                nobj = st.number_input("€", value=float(obj_val), step=100.0, 
-                                      key=f"obj_{ep.get('id')}", label_visibility="collapsed", format="%.0f")
-            with oc3:
-                if st.button("💾", key=f"sobj_{ep.get('id')}"):
-                    save_objectif(obj_key, nobj, obj_id)
+            c1, c2, c3 = st.columns([2.5, 1.5, 0.5])
+            with c1:
+                st.write(f"**{key}**")
+            with c2:
+                nobj = st.number_input("Objectif", value=float(obj_val), step=100.0, 
+                                      key=f"obj_{ep.get('id')}", label_visibility="collapsed")
+            with c3:
+                if st.button("✓", key=f"save_obj_{ep.get('id')}", help="Enregistrer"):
+                    save_objectif(key, nobj, obj_id)
                     st.toast("✅ Objectif sauvegardé")
                     refresh()
 
-# --- TAB 5: CONFIG ---
+# ------ TAB 5: PARAMÈTRES ------
 with tabs[4]:
-    st.markdown("### ⚙️ Paramètres")
+    st.subheader("⚙️ Paramètres")
     
-    c1, c2 = st.columns(2)
+    col1, col2 = st.columns(2)
     
-    with c1:
-        st.markdown("#### 👥 Utilisateurs autorisés")
-        st.caption("Emails des personnes pouvant accéder à l'application")
-        users = data["config"].get("authorized_users", "tchamfong@gmail.com,ophelie.linde@gmail.com")
+    with col1:
+        st.write("### 👥 Utilisateurs autorisés")
+        users = data["config"].get("authorized_users", "")
         new_users = st.text_area("Emails (séparés par des virgules)", value=users, height=100)
-        if st.button("💾 Sauvegarder", key="save_users", type="primary"):
+        if st.button("✓ Sauvegarder", type="primary"):
             rid = data["config"].get("_record_ids", {}).get("authorized_users")
             save_config("authorized_users", new_users, rid)
             st.success("✅ Sauvegardé !")
             refresh()
     
-    with c2:
-        st.markdown("#### ℹ️ Informations")
-        st.markdown(f"""
-        <div class="card">
-            <div class="stat-row">
-                <span class="stat-label">Utilisateur connecté</span>
-                <span class="stat-value">{user.get('email', 'N/A')}</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">Année affichée</span>
-                <span class="stat-value">{ANNEE}</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">Mois courant</span>
-                <span class="stat-value">{MOIS[mois_courant-1]}</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+    with col2:
+        st.write("### ℹ️ Informations")
+        st.write(f"Utilisateur : **{user.get('email', '')}**")
+        st.write(f"Année : **{ANNEE}**")
+        st.write(f"Mois courant : **{MOIS[mois_actuel-1]}**")
         
-        st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
-        if st.button("🔄 Rafraîchir les données", use_container_width=True):
+        if st.button("🔄 Rafraîchir les données"):
             refresh()
 
-# === FOOTER ===
-st.markdown("""
-<div class="app-footer">
-    <p>Budget Familial • Fait avec ❤️ • Streamlit + Airtable</p>
-</div>
-""", unsafe_allow_html=True)
+# Footer
+st.divider()
+st.caption("Budget Familial • Streamlit + Airtable")
