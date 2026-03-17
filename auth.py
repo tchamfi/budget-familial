@@ -1,11 +1,11 @@
 """
-auth.py — Authentification Google SSO pour Budget Familial
+auth.py — Authentification Google SSO
+Version Premium : Design luxe pour Budget Famille TCHAMFONG
 """
 
 import streamlit as st
 
 def get_authorized_users() -> list:
-    """Récupère la liste des utilisateurs autorisés depuis les secrets"""
     try:
         users = st.secrets.get("AUTHORIZED_USERS", "")
         if users:
@@ -15,44 +15,223 @@ def get_authorized_users() -> list:
     return ["tchamfong@gmail.com", "ophelie.linde@gmail.com"]
 
 def login_page():
-    """Affiche la page de connexion Google SSO"""
+    """Page de connexion premium"""
     
+    # CSS Premium pour la page de login
     st.markdown("""
     <style>
-        .login-container {
-            max-width: 450px;
-            margin: 80px auto;
-            padding: 40px;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-            text-align: center;
-        }
-        .login-title {
-            font-size: 2.2rem;
-            font-weight: 700;
-            color: #1a1a2e;
-            margin-bottom: 10px;
-        }
-        .login-subtitle {
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 1rem;
-        }
-        .login-emoji {
-            font-size: 4rem;
-            margin-bottom: 20px;
-        }
-    </style>
+    /* Import Google Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
     
+    /* Variables */
+    :root {
+        --primary-emerald: #10B981;
+        --primary-dark: #059669;
+        --bg-dark: #0F172A;
+        --bg-card: #1E293B;
+        --text-primary: #F8FAFC;
+        --text-secondary: #94A3B8;
+        --gradient-primary: linear-gradient(135deg, #10B981 0%, #059669 50%, #047857 100%);
+        --gradient-dark: linear-gradient(180deg, #0F172A 0%, #1E293B 100%);
+        --shadow-glow: 0 0 60px rgba(16, 185, 129, 0.2);
+    }
+    
+    /* Global */
+    .stApp {
+        background: var(--gradient-dark) !important;
+    }
+    
+    .main .block-container {
+        padding-top: 5rem !important;
+        max-width: 600px !important;
+    }
+    
+    /* Hide Streamlit elements */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Login container */
+    .login-container {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 150, 105, 0.04) 100%);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 24px;
+        padding: 3rem;
+        text-align: center;
+        backdrop-filter: blur(10px);
+        box-shadow: var(--shadow-glow);
+        animation: fadeInUp 0.6s ease-out;
+    }
+    
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    /* Logo/Icon */
+    .login-icon {
+        font-size: 4rem;
+        margin-bottom: 1.5rem;
+        animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+    }
+    
+    /* Title */
+    .login-title {
+        font-family: 'Playfair Display', serif;
+        font-size: 2.5rem;
+        font-weight: 600;
+        background: linear-gradient(135deg, #10B981 0%, #34D399 50%, #10B981 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin: 0 0 0.5rem 0;
+        letter-spacing: -0.02em;
+    }
+    
+    .login-subtitle {
+        font-family: 'DM Sans', sans-serif;
+        color: var(--text-secondary);
+        font-size: 1.1rem;
+        margin-bottom: 2rem;
+        letter-spacing: 0.5px;
+    }
+    
+    /* Divider */
+    .login-divider {
+        display: flex;
+        align-items: center;
+        margin: 2rem 0;
+    }
+    
+    .login-divider::before,
+    .login-divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    }
+    
+    .login-divider-text {
+        font-family: 'DM Sans', sans-serif;
+        color: var(--text-muted);
+        padding: 0 1rem;
+        font-size: 0.9rem;
+    }
+    
+    /* Info box */
+    .login-info {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.2);
+        border-radius: 12px;
+        padding: 1rem 1.5rem;
+        margin-top: 2rem;
+        font-family: 'DM Sans', sans-serif;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+    }
+    
+    .login-info strong {
+        color: #10B981;
+    }
+    
+    /* Features list */
+    .features-list {
+        display: flex;
+        justify-content: center;
+        gap: 2rem;
+        margin-top: 1.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .feature-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-family: 'DM Sans', sans-serif;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+    }
+    
+    .feature-icon {
+        color: #10B981;
+        font-size: 1.1rem;
+    }
+    
+    /* Button styling */
+    .stButton > button {
+        font-family: 'DM Sans', sans-serif !important;
+        font-weight: 600 !important;
+        font-size: 1rem !important;
+        border-radius: 12px !important;
+        padding: 0.875rem 2rem !important;
+        background: var(--gradient-primary) !important;
+        border: none !important;
+        color: white !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3) !important;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4) !important;
+    }
+    
+    /* Footer */
+    .login-footer {
+        margin-top: 3rem;
+        text-align: center;
+        color: var(--text-muted);
+        font-family: 'DM Sans', sans-serif;
+        font-size: 0.8rem;
+    }
+    
+    .login-footer a {
+        color: #10B981;
+        text-decoration: none;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Login container
+    st.markdown("""
     <div class="login-container">
-        <div class="login-emoji">💰</div>
-        <div class="login-title">Budget Familial</div>
-        <div class="login-subtitle">Connectez-vous avec votre compte Google</div>
+        <div class="login-icon">💎</div>
+        <h1 class="login-title">Budget Famille TCHAMFONG</h1>
+        <p class="login-subtitle">Gestion financière intelligente</p>
+        
+        <div class="features-list">
+            <div class="feature-item">
+                <span class="feature-icon">📊</span>
+                <span>Tableaux de bord</span>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">🎯</span>
+                <span>Objectifs épargne</span>
+            </div>
+            <div class="feature-item">
+                <span class="feature-icon">🔒</span>
+                <span>Données sécurisées</span>
+            </div>
+        </div>
+        
+        <div class="login-divider">
+            <span class="login-divider-text">Connexion sécurisée</span>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Google OAuth
+    # Google OAuth button
     try:
         from streamlit_oauth import OAuth2Component
         
@@ -67,19 +246,19 @@ def login_page():
             token_endpoint="https://oauth2.googleapis.com/token",
         )
         
-        result = oauth2.authorize_button(
-            name="Se connecter avec Google",
-            icon="https://www.google.com/favicon.ico",
-            redirect_uri=REDIRECT_URI,
-            scope="openid email profile",
-            key="google_oauth",
-            extras_params={"prompt": "consent", "access_type": "offline"},
-            use_container_width=True,
-            pkce="S256",
-        )
+        # Center the button
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            result = oauth2.authorize_button(
+                name="🔐 Connexion avec Google",
+                redirect_uri=REDIRECT_URI,
+                scope="openid email profile",
+                key="google_oauth",
+                extras_params={"prompt": "consent", "access_type": "offline"},
+                pkce="S256",
+            )
         
         if result and "token" in result:
-            # Récupérer les infos utilisateur
             import requests
             access_token = result["token"]["access_token"]
             
@@ -92,7 +271,6 @@ def login_page():
                 user_info = user_info_response.json()
                 email = user_info.get("email", "").lower()
                 
-                # Vérifier si autorisé
                 if email in get_authorized_users():
                     st.session_state.user_info = {
                         "email": email,
@@ -102,27 +280,34 @@ def login_page():
                     st.session_state.authenticated = True
                     st.rerun()
                 else:
-                    st.error(f"⛔ Accès refusé pour {email}")
-                    st.info("Seuls les comptes autorisés peuvent accéder à cette application.")
-            else:
-                st.error("Erreur lors de la récupération des informations utilisateur")
-                
+                    st.error(f"⛔ Accès non autorisé pour {email}")
+                    st.markdown("""
+                    <div class="login-info">
+                        <strong>Accès restreint</strong><br>
+                        Cette application est réservée aux membres de la famille TCHAMFONG.
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
     except ImportError:
-        st.error("❌ Module streamlit-oauth non installé")
-        st.code("pip install streamlit-oauth")
+        st.error("Module streamlit-oauth non installé")
     except Exception as e:
-        st.error(f"❌ Erreur OAuth: {e}")
+        st.error(f"Erreur de connexion: {e}")
+    
+    # Footer
+    st.markdown("""
+    <div class="login-footer">
+        💎 Budget Famille TCHAMFONG • Streamlit + Airtable<br>
+        <span style="opacity: 0.6;">Données synchronisées en temps réel</span>
+    </div>
+    """, unsafe_allow_html=True)
 
 def logout():
-    """Déconnexion"""
     st.session_state.user_info = None
     st.session_state.authenticated = False
     st.rerun()
 
 def get_current_user():
-    """Retourne l'utilisateur courant"""
     return st.session_state.get("user_info")
 
 def is_authenticated() -> bool:
-    """Vérifie si l'utilisateur est authentifié"""
     return st.session_state.get("authenticated", False)

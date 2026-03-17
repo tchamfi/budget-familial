@@ -279,6 +279,30 @@ def load_epargne_montants(annee: int = 2026) -> List[Dict]:
             })
     return montants
 
+def save_epargne(type_ep: str, beneficiaire: str, ordre: int = 999, record_id: str = None) -> Optional[str]:
+    """Crée ou met à jour un type d'épargne"""
+    fields = {
+        "type": type_ep,
+        "beneficiaire": beneficiaire,
+        "ordre": ordre
+    }
+    
+    if record_id:
+        return record_id if _update_record("Epargne", record_id, fields) else None
+    else:
+        return _create_record("Epargne", fields)
+
+def delete_epargne(epargne_id: str) -> bool:
+    """Supprime un type d'épargne et ses montants associés"""
+    # D'abord supprimer les montants
+    montants = load_epargne_montants()
+    for m in montants:
+        if m.get("epargne_id") == epargne_id:
+            _delete_record("Epargne_Montants", m["id"])
+    
+    # Puis supprimer l'épargne
+    return _delete_record("Epargne", epargne_id)
+
 def save_epargne_montant(epargne_id: str, mois: int, annee: int, montant: float, record_id: str = None) -> bool:
     """Sauvegarde un montant d'épargne"""
     fields = {
