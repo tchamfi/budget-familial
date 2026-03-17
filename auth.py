@@ -1,9 +1,10 @@
 """
 auth.py — Authentification Google SSO
-Version simplifiée - Streamlit natif uniquement
+Utilise st.components.v1.html() pour un vrai rendu HTML
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 def get_authorized_users() -> list:
     try:
@@ -15,33 +16,23 @@ def get_authorized_users() -> list:
     return ["tchamfong@gmail.com", "ophelie.linde@gmail.com"]
 
 def login_page():
-    """Page de connexion simple et propre"""
+    """Page de connexion avec HTML rendu via components"""
     
-    # CSS minimal
+    # CSS de base pour Streamlit
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    
     .stApp {
-        background: linear-gradient(180deg, #1a1f35 0%, #1a1f35 35%, #F8F9FB 35%) !important;
+        background: #F8F9FB !important;
     }
-    
     .main .block-container {
-        padding-top: 3rem !important;
-        max-width: 500px !important;
+        padding: 0 !important;
+        max-width: 100% !important;
     }
-    
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    h1 {
-        font-family: 'Inter', sans-serif !important;
-        font-weight: 700 !important;
-        color: #22C55E !important;
-        text-align: center !important;
-    }
-    
+    /* Style du bouton OAuth */
     .stButton > button {
         font-family: 'Inter', sans-serif !important;
         font-weight: 600 !important;
@@ -54,7 +45,6 @@ def login_page():
         width: 100% !important;
         box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3) !important;
     }
-    
     .stButton > button:hover {
         transform: translateY(-2px) !important;
         box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4) !important;
@@ -62,90 +52,174 @@ def login_page():
     </style>
     """, unsafe_allow_html=True)
     
-    # Contenu simple avec Streamlit natif
-    st.write("")
+    # Header HTML avec st.components.v1.html()
+    header_html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family: 'Inter', sans-serif;
+                background: transparent;
+            }
+            .hero {
+                background: linear-gradient(135deg, #1a1f35 0%, #2d1f47 50%, #1a2540 100%);
+                padding: 3rem 2rem;
+                text-align: center;
+                border-radius: 0 0 30px 30px;
+            }
+            .hero-icon {
+                font-size: 3rem;
+                margin-bottom: 1rem;
+            }
+            .hero-title {
+                font-size: 2.2rem;
+                font-weight: 700;
+                background: linear-gradient(135deg, #22C55E 0%, #4ADE80 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+                margin-bottom: 0.5rem;
+            }
+            .hero-subtitle {
+                color: #94A3B8;
+                font-size: 1rem;
+                margin-bottom: 1.5rem;
+            }
+            .badges {
+                display: flex;
+                justify-content: center;
+                gap: 0.75rem;
+                flex-wrap: wrap;
+            }
+            .badge {
+                background: rgba(255,255,255,0.1);
+                border: 1px solid rgba(255,255,255,0.15);
+                border-radius: 20px;
+                padding: 0.4rem 1rem;
+                color: #E2E8F0;
+                font-size: 0.85rem;
+                font-weight: 500;
+            }
+            .badge.highlight {
+                background: rgba(34, 197, 94, 0.2);
+                border-color: rgba(34, 197, 94, 0.3);
+                color: #4ADE80;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="hero">
+            <div class="hero-icon">💰</div>
+            <h1 class="hero-title">Budget Famille TCHAMFONG</h1>
+            <p class="hero-subtitle">Gestion financière intelligente</p>
+            <div class="badges">
+                <span class="badge highlight">🔒 Sécurisé</span>
+                <span class="badge">📊 Tableaux de bord</span>
+                <span class="badge">🎯 Objectifs</span>
+                <span class="badge">☁️ Cloud</span>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    # Afficher le header avec components.html
+    components.html(header_html, height=280, scrolling=False)
+    
+    # Carte de connexion
     st.write("")
     
-    # Centrer le contenu
     col1, col2, col3 = st.columns([1, 2, 1])
-    
     with col2:
-        st.markdown("<h1 style='font-size: 3rem; margin-bottom: 0;'>💰</h1>", unsafe_allow_html=True)
-        st.markdown("<h1 style='margin-top: 0;'>Budget Famille TCHAMFONG</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #94A3B8; margin-bottom: 2rem;'>Gestion financière intelligente</p>", unsafe_allow_html=True)
-        
-        st.write("")
-        st.write("")
-        
-        # Badges simples avec colonnes Streamlit
-        b1, b2, b3, b4 = st.columns(4)
-        b1.caption("🔒 Sécurisé")
-        b2.caption("📊 Dashboard")
-        b3.caption("🎯 Objectifs")
-        b4.caption("☁️ Cloud")
-        
-        st.write("")
-        st.divider()
-        st.write("")
-        
-        # Google OAuth
-        try:
-            from streamlit_oauth import OAuth2Component
+        # Card blanche
+        with st.container():
+            st.markdown("""
+            <div style="
+                background: white;
+                border-radius: 16px;
+                padding: 2rem;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+                border: 1px solid #E5E7EB;
+                text-align: center;
+                margin-top: -20px;
+            ">
+                <h3 style="font-family: Inter, sans-serif; font-weight: 600; color: #1F2937; margin-bottom: 0.5rem;">
+                    Bienvenue 👋
+                </h3>
+                <p style="font-family: Inter, sans-serif; color: #6B7280; font-size: 0.9rem;">
+                    Connectez-vous pour accéder à votre espace
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
             
-            CLIENT_ID = st.secrets.get("GOOGLE_CLIENT_ID", "")
-            CLIENT_SECRET = st.secrets.get("GOOGLE_CLIENT_SECRET", "")
-            REDIRECT_URI = st.secrets.get("REDIRECT_URI", "https://budget-familial-tchamfong.streamlit.app/")
+            st.write("")
+            st.divider()
+            st.write("")
             
-            oauth2 = OAuth2Component(
-                client_id=CLIENT_ID,
-                client_secret=CLIENT_SECRET,
-                authorize_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
-                token_endpoint="https://oauth2.googleapis.com/token",
-            )
-            
-            result = oauth2.authorize_button(
-                name="Se connecter avec Google",
-                redirect_uri=REDIRECT_URI,
-                scope="openid email profile",
-                key="google_oauth",
-                extras_params={"prompt": "consent", "access_type": "offline"},
-                pkce="S256",
-                use_container_width=True,
-            )
-            
-            if result and "token" in result:
-                import requests
-                access_token = result["token"]["access_token"]
+            # Google OAuth
+            try:
+                from streamlit_oauth import OAuth2Component
                 
-                user_info_response = requests.get(
-                    "https://www.googleapis.com/oauth2/v2/userinfo",
-                    headers={"Authorization": f"Bearer {access_token}"}
+                CLIENT_ID = st.secrets.get("GOOGLE_CLIENT_ID", "")
+                CLIENT_SECRET = st.secrets.get("GOOGLE_CLIENT_SECRET", "")
+                REDIRECT_URI = st.secrets.get("REDIRECT_URI", "https://budget-familial-tchamfong.streamlit.app/")
+                
+                oauth2 = OAuth2Component(
+                    client_id=CLIENT_ID,
+                    client_secret=CLIENT_SECRET,
+                    authorize_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
+                    token_endpoint="https://oauth2.googleapis.com/token",
                 )
                 
-                if user_info_response.status_code == 200:
-                    user_info = user_info_response.json()
-                    email = user_info.get("email", "").lower()
+                result = oauth2.authorize_button(
+                    name="Se connecter avec Google",
+                    redirect_uri=REDIRECT_URI,
+                    scope="openid email profile",
+                    key="google_oauth",
+                    extras_params={"prompt": "consent", "access_type": "offline"},
+                    pkce="S256",
+                    use_container_width=True,
+                )
+                
+                if result and "token" in result:
+                    import requests
+                    access_token = result["token"]["access_token"]
                     
-                    if email in get_authorized_users():
-                        st.session_state.user_info = {
-                            "email": email,
-                            "name": user_info.get("name", email.split("@")[0]),
-                            "picture": user_info.get("picture")
-                        }
-                        st.session_state.authenticated = True
-                        st.rerun()
-                    else:
-                        st.error(f"⛔ Accès non autorisé pour {email}")
-                        st.info("Cette application est réservée aux membres de la famille TCHAMFONG.")
+                    user_info_response = requests.get(
+                        "https://www.googleapis.com/oauth2/v2/userinfo",
+                        headers={"Authorization": f"Bearer {access_token}"}
+                    )
+                    
+                    if user_info_response.status_code == 200:
+                        user_info = user_info_response.json()
+                        email = user_info.get("email", "").lower()
                         
-        except ImportError:
-            st.error("❌ Module streamlit-oauth non installé")
-        except Exception as e:
-            st.error(f"❌ Erreur: {e}")
-        
-        st.write("")
-        st.write("")
-        st.caption("💰 Budget Famille TCHAMFONG • Streamlit + Airtable")
+                        if email in get_authorized_users():
+                            st.session_state.user_info = {
+                                "email": email,
+                                "name": user_info.get("name", email.split("@")[0]),
+                                "picture": user_info.get("picture")
+                            }
+                            st.session_state.authenticated = True
+                            st.rerun()
+                        else:
+                            st.error(f"⛔ Accès non autorisé pour {email}")
+                            st.info("Cette application est réservée aux membres de la famille TCHAMFONG.")
+                            
+            except ImportError:
+                st.error("❌ Module streamlit-oauth non installé")
+            except Exception as e:
+                st.error(f"❌ Erreur: {e}")
+            
+            st.write("")
+            st.caption("💰 Budget Famille TCHAMFONG • Streamlit + Airtable")
 
 def logout():
     st.session_state.user_info = None
