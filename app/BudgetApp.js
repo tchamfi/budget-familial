@@ -164,14 +164,13 @@ function AIAssistant({revenus,charges,chargesMontants,epargne,epargneMontants,ob
     setMsgs(p=>[...p,userMsg]);setInput("");setLoading(true);
     try{
       const ctx=buildContext();
-      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-        model:"claude-sonnet-4-20250514",max_tokens:1000,
+      const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
         system:`Tu es un assistant budgétaire expert pour une famille française. Tu analyses leurs données financières et donnes des conseils précis, chiffrés et actionables. Réponds toujours en français, de manière concise et bienveillante. Voici les données:\n\n${ctx}`,
         messages:[...msgs.filter(m=>m.role!=="assistant"||msgs.indexOf(m)>0).slice(-6),userMsg]
       })});
       const data=await res.json();
-      const text=data.content?.map(c=>c.text||"").join("")||"Désolé, je n'ai pas pu analyser vos données.";
-      setMsgs(p=>[...p,{role:"assistant",content:text}]);
+      if(data.error){setMsgs(p=>[...p,{role:"assistant",content:`⚠️ ${data.error}`}]);}
+      else{const text=data.content?.map(c=>c.text||"").join("")||"Désolé, je n'ai pas pu analyser vos données.";setMsgs(p=>[...p,{role:"assistant",content:text}]);}
     }catch(e){setMsgs(p=>[...p,{role:"assistant",content:"Erreur de connexion. Réessayez."}]);}
     setLoading(false);
   };
@@ -481,7 +480,7 @@ export default function BudgetApp(){
     {tab==="objectifs"&&<div className="fade-up" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:"0 0 20px"}}>Objectifs {annee}</h3><table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th style={thS}>Type</th><th style={{...thS,textAlign:"right",width:150}}>Objectif</th><th style={{...thS,textAlign:"right",width:150}}>Réalisé</th><th style={{...thS,width:200}}>Progression</th><th style={{...thS,width:130}}></th></tr></thead><tbody>{objectifs.map(obj=><ObjRow key={obj.id} obj={obj} epargne={epargne} emByYear={emByYear} tdS={tdS} iS={iS} bP={bP} bG={bG} bD={bD} onSave={async v=>{await save(async()=>{await updateRecord("Objectifs",obj.id,{objectif_annuel:v});setObjectifs(p=>p.map(r=>r.id===obj.id?{...r,fields:{...r.fields,objectif_annuel:v}}:r));});}} onDelete={()=>setDelObjectif(obj)}/>)}</tbody></table></div>}
 
     {/* VIREMENTS */}
-    {tab==="virements"&&<div className="fade-up"><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:20}}>Virements compte commun</h3><VirementCalcul charges={charges} chargesMontants={chargesMontants} revenus={revenus} annee={annee} mois={mois}/></div>}
+    {tab==="virements"&&<div className="fade-up"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:0}}>Virements compte commun — {MOIS_FULL[mois]} {annee}</h3><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{MOIS.map((m,i)=><button key={i} className="btn-press" style={mB(mois===i)} onClick={()=>setMois(i)}>{m}</button>)}</div></div><VirementCalcul charges={charges} chargesMontants={chargesMontants} revenus={revenus} annee={annee} mois={mois}/></div>}
 
     {/* SIMULATEUR IR */}
     {tab==="impots"&&<div className="fade-up"><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:20}}>Simulateur Impôt sur le Revenu</h3><TaxSimulator/></div>}
