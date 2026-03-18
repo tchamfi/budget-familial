@@ -17,6 +17,8 @@ const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR
 async function fetchAll(table){let all=[],offset=null;do{const url=`${API}/${encodeURIComponent(table)}?pageSize=100${offset?`&offset=${offset}`:""}`;const res=await fetch(url,{headers:HEADERS});const data=await res.json();all=all.concat(data.records||[]);offset=data.offset;}while(offset);return all;}
 async function updateRecord(table,id,fields){return(await fetch(`${API}/${encodeURIComponent(table)}/${id}`,{method:"PATCH",headers:HEADERS,body:JSON.stringify({fields})})).json();}
 async function createRecord(table,fields){return(await fetch(`${API}/${encodeURIComponent(table)}`,{method:"POST",headers:HEADERS,body:JSON.stringify({records:[{fields}]})})).json();}
+async function deleteRecord(table,id){await fetch(`${API}/${encodeURIComponent(table)}/${id}`,{method:"DELETE",headers:HEADERS});}
+async function batchDelete(table,ids){for(let i=0;i<ids.length;i+=10){const batch=ids.slice(i,i+10);const params=batch.map(id=>`records[]=${id}`).join("&");await fetch(`${API}/${encodeURIComponent(table)}?${params}`,{method:"DELETE",headers:HEADERS});}}
 
 function decodeJwt(t){try{return JSON.parse(atob(t.split(".")[1].replace(/-/g,"+").replace(/_/g,"/")));}catch{return null;}}
 
@@ -40,6 +42,7 @@ const S={
   select:{padding:"8px 12px",border:"1px solid #d1d5db",borderRadius:8,fontSize:13,outline:"none",background:"#fff"},
   btn:(c="#2563eb")=>({padding:"8px 16px",background:c,color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600}),
   btnOutline:{padding:"8px 16px",background:"transparent",color:"#64748b",border:"1px solid #d1d5db",borderRadius:8,cursor:"pointer",fontSize:13},
+  btnDanger:{padding:"6px 12px",background:"transparent",color:"#dc2626",border:"1px solid #fca5a5",borderRadius:8,cursor:"pointer",fontSize:11,fontWeight:600},
   badge:c=>({display:"inline-block",padding:"2px 8px",borderRadius:12,fontSize:11,fontWeight:600,background:`${c}15`,color:c}),
   progress:{height:8,borderRadius:4,background:"#e2e8f0",overflow:"hidden"},
   progressBar:(pct,c)=>({height:"100%",width:`${Math.min(pct,100)}%`,background:c,borderRadius:4,transition:"width 0.5s"}),
@@ -53,6 +56,7 @@ const S={
   loginCard:{background:"#fff",borderRadius:20,padding:"48px 40px",boxShadow:"0 20px 60px rgba(0,0,0,0.08)",textAlign:"center",maxWidth:400,width:"90%"},
   yearBtn:a=>({padding:"4px 12px",border:"none",borderRadius:6,cursor:"pointer",fontSize:13,fontWeight:a?700:400,background:a?"#fff":"transparent",color:a?"#2563eb":"#94a3b8",boxShadow:a?"0 1px 3px rgba(0,0,0,0.1)":"none"}),
   avatar:{width:32,height:32,borderRadius:"50%",objectFit:"cover"},
+  dangerZone:{border:"1px solid #fca5a5",borderRadius:12,padding:16,background:"#fef2f2",marginTop:8},
 };
 
 function LoginPage({onLogin}){
@@ -74,6 +78,74 @@ function LoginPage({onLogin}){
   </div></div>);
 }
 
+// === CONFIRMATION MODAL ===
+function ConfirmModal({title,message,children,onConfirm,onCancel,confirmLabel="Confirmer",confirmColor="#dc2626"}){
+  return(<div style={S.modal} onClick={onCancel}><div style={S.modalContent} onClick={e=>e.stopPropagation()}>
+    <h3 style={{margin:"0 0 12px",fontSize:18,fontWeight:700}}>{title}</h3>
+    <p style={{color:"#64748b",fontSize:14,margin:"0 0 16px"}}>{message}</p>
+    {children}
+    <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:20}}>
+      <button style={S.btnOutline} onClick={onCancel}>Annuler</button>
+      <button style={S.btn(confirmColor)} onClick={onConfirm}>{confirmLabel}</button>
+    </div>
+  </div></div>);
+}
+
+// === DELETE CHARGE MODAL (with month selection) ===
+function DeleteChargeModal({charge,onClose,onDelete}){
+  const[mode,setMode]=useState("all");
+  const[selMois,setSelMois]=useState([]);
+  const toggle=i=>setSelMois(p=>p.includes(i)?p.filter(m=>m!==i):[...p,i]);
+  return(<div style={S.modal} onClick={onClose}><div style={S.modalContent} onClick={e=>e.stopPropagation()}>
+    <h3 style={{margin:"0 0 8px",fontSize:18,fontWeight:700,color:"#dc2626"}}>Supprimer une charge</h3>
+    <p style={{color:"#64748b",fontSize:14,margin:"0 0 16px"}}>Charge : <strong>{charge.fields?.description}</strong></p>
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
+        <input type="radio" name="delMode" checked={mode==="all"} onChange={()=>setMode("all")}/>
+        <span style={{fontSize:14,fontWeight:600}}>Supprimer complètement</span>
+        <span style={{fontSize:12,color:"#94a3b8"}}>(charge + tous les montants, toutes les années)</span>
+      </label>
+      <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
+        <input type="radio" name="delMode" checked={mode==="months"} onChange={()=>setMode("months")}/>
+        <span style={{fontSize:14,fontWeight:600}}>Remettre à 0 pour certains mois</span>
+      </label>
+      {mode==="months"&&<div style={{display:"flex",gap:4,flexWrap:"wrap",paddingLeft:24}}>
+        {MOIS.map((m,i)=><button key={i} style={S.monthBtn(selMois.includes(i))} onClick={()=>toggle(i)}>{m}</button>)}
+        <button style={{...S.btnOutline,fontSize:11,padding:"4px 10px"}} onClick={()=>setSelMois(Array.from({length:12},(_,i)=>i))}>Tous</button>
+      </div>}
+    </div>
+    <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:20}}>
+      <button style={S.btnOutline} onClick={onClose}>Annuler</button>
+      <button style={S.btn("#dc2626")} disabled={mode==="months"&&selMois.length===0} onClick={()=>onDelete(mode,selMois)}>
+        {mode==="all"?"Supprimer définitivement":"Remettre à 0"}
+      </button>
+    </div>
+  </div></div>);
+}
+
+// === INIT YEAR MODAL ===
+function InitYearModal({targetYear,prevYear,onClose,onInit}){
+  const[mode,setMode]=useState("duplicate");
+  return(<div style={S.modal} onClick={onClose}><div style={S.modalContent} onClick={e=>e.stopPropagation()}>
+    <h3 style={{margin:"0 0 8px",fontSize:18,fontWeight:700}}>Initialiser {targetYear}</h3>
+    <p style={{color:"#64748b",fontSize:14,margin:"0 0 16px"}}>Aucune donnée n'existe pour {targetYear}. Comment voulez-vous commencer ?</p>
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <label style={{display:"flex",alignItems:"flex-start",gap:8,cursor:"pointer",padding:12,border:mode==="duplicate"?"2px solid #2563eb":"1px solid #d1d5db",borderRadius:10,background:mode==="duplicate"?"#eff6ff":"#fff"}}>
+        <input type="radio" name="initMode" checked={mode==="duplicate"} onChange={()=>setMode("duplicate")} style={{marginTop:2}}/>
+        <div><div style={{fontSize:14,fontWeight:600}}>Dupliquer {prevYear}</div><div style={{fontSize:12,color:"#64748b",marginTop:2}}>Copie les montants de revenus, charges et épargne de {prevYear}</div></div>
+      </label>
+      <label style={{display:"flex",alignItems:"flex-start",gap:8,cursor:"pointer",padding:12,border:mode==="zero"?"2px solid #2563eb":"1px solid #d1d5db",borderRadius:10,background:mode==="zero"?"#eff6ff":"#fff"}}>
+        <input type="radio" name="initMode" checked={mode==="zero"} onChange={()=>setMode("zero")} style={{marginTop:2}}/>
+        <div><div style={{fontSize:14,fontWeight:600}}>Repartir de zéro</div><div style={{fontSize:12,color:"#64748b",marginTop:2}}>Crée la structure avec tous les montants à 0</div></div>
+      </label>
+    </div>
+    <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:20}}>
+      <button style={S.btnOutline} onClick={onClose}>Annuler</button>
+      <button style={S.btn("#2563eb")} onClick={()=>onInit(mode)}>Initialiser {targetYear}</button>
+    </div>
+  </div></div>);
+}
+
 export default function BudgetApp(){
   const[user,setUser]=useState(null);
   const[authChecked,setAuthChecked]=useState(false);
@@ -91,6 +163,10 @@ export default function BudgetApp(){
   const[objectifs,setObjectifs]=useState([]);
   const[showAddCharge,setShowAddCharge]=useState(false);
   const[showAddEpargne,setShowAddEpargne]=useState(false);
+  const[delCharge,setDelCharge]=useState(null);
+  const[delEpargne,setDelEpargne]=useState(null);
+  const[delObjectif,setDelObjectif]=useState(null);
+  const[initYearTarget,setInitYearTarget]=useState(null);
 
   useEffect(()=>{const s=localStorage.getItem("budget_user");if(s){try{const u=JSON.parse(s);if(AUTHORIZED_EMAILS.includes(u.email))setUser(u);}catch{}}setAuthChecked(true);},[]);
 
@@ -116,7 +192,83 @@ export default function BudgetApp(){
   const chartData=useMemo(()=>MOIS.map((m,i)=>{const r=getRevMois(i);return{mois:m,revenus:r.lionel+r.ophelie,charges:totalChgMois(i),epargne:totalEpMois(i),solde:(r.lionel+r.ophelie)-totalChgMois(i)-totalEpMois(i)};}),[revByYear,cmByYear,emByYear]);
   const pieData=useMemo(()=>{const map={};charges.forEach(c=>{const cat=c.fields?.categorie||"Autre";const t=cmByYear.filter(cm=>{const l=cm.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===c.id&&cm.fields?.mois===mois+1;}).reduce((s,cm)=>s+(cm.fields.lionel||0)+(cm.fields.ophelie||0),0);map[cat]=(map[cat]||0)+t;});return Object.entries(map).filter(([,v])=>v>0).map(([name,value])=>({name,value}));},[charges,cmByYear,mois]);
 
-  const initYear=async y=>{if(revenus.some(r=>r.fields?.annee===y)){setAnnee(y);return;}if(!confirm(`Initialiser ${y} ? Les charges seront copiées avec des montants à 0.`))return;setSaving(true);try{for(let m=1;m<=12;m++)await createRecord("Revenus",{mois:m,annee:y,lionel:0,ophelie:0});for(const c of charges)for(let m=1;m<=12;m++)await createRecord("Charges_Montants",{mois:m,annee:y,lionel:0,ophelie:0,charge_id:[c.id]});for(const ep of epargne)for(let m=1;m<=12;m++)await createRecord("Epargne_montants",{mois:m,annee:y,montant:0,epargne_id:[ep.id]});await loadData();setAnnee(y);}catch(e){console.error(e);alert("Erreur");}setSaving(false);};
+  // === INIT YEAR (with duplicate/zero choice) ===
+  const handleInitYear=async(y)=>{
+    if(revenus.some(r=>r.fields?.annee===y)){setAnnee(y);return;}
+    setInitYearTarget(y);
+  };
+  const doInitYear=async(mode)=>{
+    const y=initYearTarget;
+    const prevY=y-1;
+    setInitYearTarget(null);
+    setSaving(true);
+    try{
+      if(mode==="duplicate"){
+        // Duplicate revenus from prev year
+        for(let m=1;m<=12;m++){
+          const prev=revenus.find(r=>r.fields?.annee===prevY&&r.fields?.mois===m);
+          await createRecord("Revenus",{mois:m,annee:y,lionel:prev?.fields?.lionel||0,ophelie:prev?.fields?.ophelie||0});
+        }
+        // Duplicate charge montants
+        for(const c of charges){
+          for(let m=1;m<=12;m++){
+            const prev=chargesMontants.find(r=>{const l=r.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===c.id&&r.fields?.annee===prevY&&r.fields?.mois===m;});
+            await createRecord("Charges_Montants",{mois:m,annee:y,lionel:prev?.fields?.lionel||0,ophelie:prev?.fields?.ophelie||0,charge_id:[c.id]});
+          }
+        }
+        // Duplicate epargne montants
+        for(const ep of epargne){
+          for(let m=1;m<=12;m++){
+            const prev=epargneMontants.find(r=>{const l=r.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===ep.id&&r.fields?.annee===prevY&&r.fields?.mois===m;});
+            await createRecord("Epargne_montants",{mois:m,annee:y,montant:prev?.fields?.montant||0,epargne_id:[ep.id]});
+          }
+        }
+      }else{
+        for(let m=1;m<=12;m++)await createRecord("Revenus",{mois:m,annee:y,lionel:0,ophelie:0});
+        for(const c of charges)for(let m=1;m<=12;m++)await createRecord("Charges_Montants",{mois:m,annee:y,lionel:0,ophelie:0,charge_id:[c.id]});
+        for(const ep of epargne)for(let m=1;m<=12;m++)await createRecord("Epargne_montants",{mois:m,annee:y,montant:0,epargne_id:[ep.id]});
+      }
+      await loadData();setAnnee(y);
+    }catch(e){console.error(e);alert("Erreur");}
+    setSaving(false);
+  };
+
+  // === DELETE CHARGE ===
+  const handleDeleteCharge=async(mode,selMois)=>{
+    const c=delCharge;setDelCharge(null);
+    await save(async()=>{
+      if(mode==="all"){
+        // Delete all montants for this charge (all years)
+        const cmIds=chargesMontants.filter(r=>{const l=r.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===c.id;}).map(r=>r.id);
+        await batchDelete("Charges_Montants",cmIds);
+        await deleteRecord("Charges",c.id);
+      }else{
+        // Zero out selected months for current year
+        for(const m of selMois){
+          const cm=getCM(c.id,m);
+          if(cm?.id)await updateRecord("Charges_Montants",cm.id,{lionel:0,ophelie:0});
+        }
+      }
+      await loadData();
+    });
+  };
+
+  // === DELETE EPARGNE ===
+  const handleDeleteEpargne=async()=>{
+    const ep=delEpargne;setDelEpargne(null);
+    await save(async()=>{
+      const emIds=epargneMontants.filter(r=>{const l=r.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===ep.id;}).map(r=>r.id);
+      await batchDelete("Epargne_montants",emIds);
+      await deleteRecord("Epargne",ep.id);
+      await loadData();
+    });
+  };
+
+  // === DELETE OBJECTIF ===
+  const handleDeleteObjectif=async()=>{
+    const obj=delObjectif;setDelObjectif(null);
+    await save(async()=>{await deleteRecord("Objectifs",obj.id);await loadData();});
+  };
 
   if(!authChecked)return null;
   if(!user)return<LoginPage onLogin={setUser}/>;
@@ -129,7 +281,7 @@ export default function BudgetApp(){
     <div style={S.header}>
       <div><div style={S.headerTitle}>Budget Familial {annee}</div><div style={S.headerSub}>Lionel & Ophélie TCHAMFONG</div></div>
       <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-        <div style={{display:"flex",gap:2,background:"#1e293b",borderRadius:8,padding:3}}>{availYears.map(y=><button key={y} style={S.yearBtn(annee===y)} onClick={()=>initYear(y)}>{y}</button>)}</div>
+        <div style={{display:"flex",gap:2,background:"#1e293b",borderRadius:8,padding:3}}>{availYears.map(y=><button key={y} style={S.yearBtn(annee===y)} onClick={()=>handleInitYear(y)}>{y}</button>)}</div>
         <select value={mois} onChange={e=>setMois(+e.target.value)} style={{...S.select,background:"#334155",color:"#fff",border:"1px solid #475569"}}>{MOIS_FULL.map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
         <div style={{display:"flex",alignItems:"center",gap:8}}>{user.picture&&<img src={user.picture} style={S.avatar} alt="" referrerPolicy="no-referrer"/>}<div><div style={{color:"#fff",fontSize:13,fontWeight:600}}>{user.name}</div><button onClick={logout} style={{background:"none",border:"none",color:"#94a3b8",fontSize:11,cursor:"pointer",padding:0}}>Déconnexion</button></div></div>
       </div>
@@ -156,33 +308,38 @@ export default function BudgetApp(){
 
     {tab==="charges"&&<div style={{display:"flex",flexDirection:"column",gap:16}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}><h3 style={{margin:0,fontSize:16,fontWeight:700}}>Charges — {MOIS_FULL[mois]} {annee}</h3><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{MOIS.map((m,i)=><button key={i} style={S.monthBtn(mois===i)} onClick={()=>setMois(i)}>{m}</button>)}</div><button style={S.btn("#16a34a")} onClick={()=>setShowAddCharge(true)}>+ Ajouter</button></div></div>
-      {Object.entries(chargesByCat).map(([cat,chgs])=>{const catT=chgs.reduce((s,c)=>{const cm=getCM(c.id,mois);return s+(cm?cm.lionel+cm.ophelie:0);},0);return(<div key={cat} style={S.card}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={S.tag(CAT_COLORS[cat]||"#64748b")}>{cat}</div><span style={{fontWeight:700,fontSize:14}}>{fmt(catT)}</span></div><table style={S.table}><thead><tr><th style={S.th}>Description</th><th style={{...S.th,width:70}}>Compte</th><th style={{...S.th,textAlign:"right",width:100}}>Lionel</th><th style={{...S.th,textAlign:"right",width:100}}>Ophélie</th><th style={{...S.th,textAlign:"right",width:120}}>Total</th></tr></thead><tbody>{chgs.map(c=>{const cm=getCM(c.id,mois);return<ChgRow key={c.id} charge={c} l={cm?.lionel||0} o={cm?.ophelie||0} onSave={async(l,o)=>{await save(async()=>{if(cm?.id){await updateRecord("Charges_Montants",cm.id,{lionel:l,ophelie:o});setChargesMontants(p=>p.map(r=>r.id===cm.id?{...r,fields:{...r.fields,lionel:l,ophelie:o}}:r));}});}}/>;})}</tbody></table></div>);})}
+      {Object.entries(chargesByCat).map(([cat,chgs])=>{const catT=chgs.reduce((s,c)=>{const cm=getCM(c.id,mois);return s+(cm?cm.lionel+cm.ophelie:0);},0);return(<div key={cat} style={S.card}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={S.tag(CAT_COLORS[cat]||"#64748b")}>{cat}</div><span style={{fontWeight:700,fontSize:14}}>{fmt(catT)}</span></div><table style={S.table}><thead><tr><th style={S.th}>Description</th><th style={{...S.th,width:70}}>Compte</th><th style={{...S.th,textAlign:"right",width:100}}>Lionel</th><th style={{...S.th,textAlign:"right",width:100}}>Ophélie</th><th style={{...S.th,textAlign:"right",width:90}}>Total</th><th style={{...S.th,width:60}}></th></tr></thead><tbody>{chgs.map(c=>{const cm=getCM(c.id,mois);return<ChgRow key={c.id} charge={c} l={cm?.lionel||0} o={cm?.ophelie||0} onSave={async(l,o)=>{await save(async()=>{if(cm?.id){await updateRecord("Charges_Montants",cm.id,{lionel:l,ophelie:o});setChargesMontants(p=>p.map(r=>r.id===cm.id?{...r,fields:{...r.fields,lionel:l,ophelie:o}}:r));}});}} onDelete={()=>setDelCharge(c)}/>;})}</tbody></table></div>);})}
     </div>}
 
     {tab==="epargne"&&<div style={{display:"flex",flexDirection:"column",gap:16}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}><h3 style={{margin:0,fontSize:16,fontWeight:700}}>Épargne — {MOIS_FULL[mois]} {annee}</h3><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{MOIS.map((m,i)=><button key={i} style={S.monthBtn(mois===i)} onClick={()=>setMois(i)}>{m}</button>)}</div><button style={S.btn("#16a34a")} onClick={()=>setShowAddEpargne(true)}>+ Ajouter</button></div></div>
-      <div style={S.card}><table style={S.table}><thead><tr><th style={S.th}>Type</th><th style={S.th}>Bénéficiaire</th><th style={{...S.th,textAlign:"right",width:120}}>Montant</th><th style={{...S.th,textAlign:"right",width:120}}>Cumul {annee}</th><th style={{...S.th,width:80}}></th></tr></thead><tbody>{epargne.sort((a,b)=>(a.fields?.ordre||0)-(b.fields?.ordre||0)).map(ep=>{const em=getEM(ep.id,mois);const cumul=emByYear.filter(r=>{const l=r.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===ep.id;}).reduce((s,r)=>s+(r.fields?.montant||0),0);return<EpRow key={ep.id} ep={ep} montant={em?.montant||0} cumul={cumul} onSave={async v=>{await save(async()=>{if(em?.id){await updateRecord("Epargne_montants",em.id,{montant:v});setEpargneMontants(p=>p.map(r=>r.id===em.id?{...r,fields:{...r.fields,montant:v}}:r));}});}}/>;})}</tbody><tfoot><tr style={{fontWeight:700,background:"#f8fafc"}}><td style={S.td} colSpan={2}>Total</td><td style={{...S.td,textAlign:"right"}}>{fmt(totalEpMois(mois))}</td><td style={{...S.td,textAlign:"right"}}>{fmt(emByYear.reduce((s,r)=>s+(r.fields?.montant||0),0))}</td><td style={S.td}></td></tr></tfoot></table></div>
+      <div style={S.card}><table style={S.table}><thead><tr><th style={S.th}>Type</th><th style={S.th}>Bénéficiaire</th><th style={{...S.th,textAlign:"right",width:120}}>Montant</th><th style={{...S.th,textAlign:"right",width:120}}>Cumul {annee}</th><th style={{...S.th,width:120}}></th></tr></thead><tbody>{epargne.sort((a,b)=>(a.fields?.ordre||0)-(b.fields?.ordre||0)).map(ep=>{const em=getEM(ep.id,mois);const cumul=emByYear.filter(r=>{const l=r.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===ep.id;}).reduce((s,r)=>s+(r.fields?.montant||0),0);return<EpRow key={ep.id} ep={ep} montant={em?.montant||0} cumul={cumul} onSave={async v=>{await save(async()=>{if(em?.id){await updateRecord("Epargne_montants",em.id,{montant:v});setEpargneMontants(p=>p.map(r=>r.id===em.id?{...r,fields:{...r.fields,montant:v}}:r));}});}} onDelete={()=>setDelEpargne(ep)}/>;})}</tbody><tfoot><tr style={{fontWeight:700,background:"#f8fafc"}}><td style={S.td} colSpan={2}>Total</td><td style={{...S.td,textAlign:"right"}}>{fmt(totalEpMois(mois))}</td><td style={{...S.td,textAlign:"right"}}>{fmt(emByYear.reduce((s,r)=>s+(r.fields?.montant||0),0))}</td><td style={S.td}></td></tr></tfoot></table></div>
     </div>}
 
-    {tab==="objectifs"&&<div style={S.card}><h3 style={{margin:"0 0 16px",fontSize:16,fontWeight:700}}>Objectifs {annee}</h3><table style={S.table}><thead><tr><th style={S.th}>Type</th><th style={{...S.th,textAlign:"right",width:150}}>Objectif</th><th style={{...S.th,textAlign:"right",width:150}}>Réalisé</th><th style={{...S.th,width:200}}>Progression</th><th style={{...S.th,width:80}}></th></tr></thead><tbody>{objectifs.map(obj=><ObjRow key={obj.id} obj={obj} epargne={epargne} emByYear={emByYear} onSave={async v=>{await save(async()=>{await updateRecord("Objectifs",obj.id,{objectif_annuel:v});setObjectifs(p=>p.map(r=>r.id===obj.id?{...r,fields:{...r.fields,objectif_annuel:v}}:r));});}}/>)}</tbody></table></div>}
+    {tab==="objectifs"&&<div style={S.card}><h3 style={{margin:"0 0 16px",fontSize:16,fontWeight:700}}>Objectifs {annee}</h3><table style={S.table}><thead><tr><th style={S.th}>Type</th><th style={{...S.th,textAlign:"right",width:150}}>Objectif</th><th style={{...S.th,textAlign:"right",width:150}}>Réalisé</th><th style={{...S.th,width:200}}>Progression</th><th style={{...S.th,width:120}}></th></tr></thead><tbody>{objectifs.map(obj=><ObjRow key={obj.id} obj={obj} epargne={epargne} emByYear={emByYear} onSave={async v=>{await save(async()=>{await updateRecord("Objectifs",obj.id,{objectif_annuel:v});setObjectifs(p=>p.map(r=>r.id===obj.id?{...r,fields:{...r.fields,objectif_annuel:v}}:r));});}} onDelete={()=>setDelObjectif(obj)}/>)}</tbody></table></div>}
 
     </div>
 
+    {/* MODALS */}
     {showAddCharge&&<AddChgModal cats={Object.keys(chargesByCat)} onClose={()=>setShowAddCharge(false)} onAdd={async d=>{await save(async()=>{const res=await createRecord("Charges",{description:d.description,categorie:d.categorie,compte:d.compte,ordre:charges.length+1});const nid=res.records[0].id;for(let m=0;m<12;m++)await createRecord("Charges_Montants",{mois:m+1,annee,lionel:d.moisList.includes(m)?d.lionel:0,ophelie:d.moisList.includes(m)?d.ophelie:0,charge_id:[nid]});await loadData();});setShowAddCharge(false);}}/>}
     {showAddEpargne&&<AddEpModal onClose={()=>setShowAddEpargne(false)} onAdd={async d=>{await save(async()=>{const res=await createRecord("Epargne",{type:d.type,beneficiaire:d.beneficiaire,ordre:epargne.length+1});const nid=res.records[0].id;for(let m=1;m<=12;m++)await createRecord("Epargne_montants",{mois:m,annee,montant:0,epargne_id:[nid]});if(d.objectif>0)await createRecord("Objectifs",{type:`${d.type} ${d.beneficiaire}`,objectif_annuel:d.objectif});await loadData();});setShowAddEpargne(false);}}/>}
+    {delCharge&&<DeleteChargeModal charge={delCharge} onClose={()=>setDelCharge(null)} onDelete={handleDeleteCharge}/>}
+    {delEpargne&&<ConfirmModal title="Supprimer un type d'épargne" message={`Supprimer "${delEpargne.fields?.type} - ${delEpargne.fields?.beneficiaire}" et tous ses montants ?`} onCancel={()=>setDelEpargne(null)} onConfirm={handleDeleteEpargne} confirmLabel="Supprimer"/>}
+    {delObjectif&&<ConfirmModal title="Supprimer un objectif" message={`Supprimer l'objectif "${delObjectif.fields?.type}" ?`} onCancel={()=>setDelObjectif(null)} onConfirm={handleDeleteObjectif} confirmLabel="Supprimer"/>}
+    {initYearTarget&&<InitYearModal targetYear={initYearTarget} prevYear={initYearTarget-1} onClose={()=>setInitYearTarget(null)} onInit={doInitYear}/>}
   </div>);
 }
 
-// === ROW COMPONENTS ===
+// === ROW COMPONENTS (with delete buttons) ===
 function EditRow({label,a:initA,b:initB,onSave}){const[ed,setEd]=useState(false);const[a,setA]=useState(initA);const[b,setB]=useState(initB);useEffect(()=>{setA(initA);setB(initB);},[initA,initB]);return(<tr style={{background:ed?"#fffbeb":"transparent"}}><td style={{...S.td,fontWeight:600}}>{label}</td><td style={{...S.td,textAlign:"right"}}>{ed?<input style={S.input} type="number" value={a} onChange={e=>setA(+e.target.value)}/>:fmt(initA)}</td><td style={{...S.td,textAlign:"right"}}>{ed?<input style={S.input} type="number" value={b} onChange={e=>setB(+e.target.value)}/>:fmt(initB)}</td><td style={{...S.td,textAlign:"right",fontWeight:600}}>{fmt((ed?a:initA)+(ed?b:initB))}</td><td style={S.td}>{ed?<div style={{display:"flex",gap:4}}><button style={S.btn("#16a34a")} onClick={()=>{onSave(a,b);setEd(false);}}>OK</button><button style={S.btnOutline} onClick={()=>{setA(initA);setB(initB);setEd(false);}}>X</button></div>:<button style={S.btnOutline} onClick={()=>setEd(true)}>Modifier</button>}</td></tr>);}
 
-function ChgRow({charge,l:initL,o:initO,onSave}){const[ed,setEd]=useState(false);const[l,setL]=useState(initL);const[o,setO]=useState(initO);useEffect(()=>{setL(initL);setO(initO);},[initL,initO]);return(<tr style={{background:ed?"#fffbeb":"transparent"}}><td style={S.td}>{charge.fields?.description}</td><td style={S.td}><span style={S.badge(charge.fields?.compte==="Perso"?"#ea580c":"#2563eb")}>{charge.fields?.compte||"Commun"}</span></td><td style={{...S.td,textAlign:"right"}}>{ed?<input style={S.input} type="number" value={l} onChange={e=>setL(+e.target.value)}/>:fmt(initL)}</td><td style={{...S.td,textAlign:"right"}}>{ed?<input style={S.input} type="number" value={o} onChange={e=>setO(+e.target.value)}/>:fmt(initO)}</td><td style={{...S.td,textAlign:"right"}}>{ed?<div style={{display:"flex",gap:4,justifyContent:"flex-end"}}><button style={S.btn("#16a34a")} onClick={()=>{onSave(l,o);setEd(false);}}>OK</button><button style={S.btnOutline} onClick={()=>{setL(initL);setO(initO);setEd(false);}}>X</button></div>:<div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><span>{fmt(initL+initO)}</span><button style={{...S.btnOutline,padding:"4px 10px",fontSize:11}} onClick={()=>setEd(true)}>Modifier</button></div>}</td></tr>);}
+function ChgRow({charge,l:initL,o:initO,onSave,onDelete}){const[ed,setEd]=useState(false);const[l,setL]=useState(initL);const[o,setO]=useState(initO);useEffect(()=>{setL(initL);setO(initO);},[initL,initO]);return(<tr style={{background:ed?"#fffbeb":"transparent"}}><td style={S.td}>{charge.fields?.description}</td><td style={S.td}><span style={S.badge(charge.fields?.compte==="Perso"?"#ea580c":"#2563eb")}>{charge.fields?.compte||"Commun"}</span></td><td style={{...S.td,textAlign:"right"}}>{ed?<input style={S.input} type="number" value={l} onChange={e=>setL(+e.target.value)}/>:fmt(initL)}</td><td style={{...S.td,textAlign:"right"}}>{ed?<input style={S.input} type="number" value={o} onChange={e=>setO(+e.target.value)}/>:fmt(initO)}</td><td style={{...S.td,textAlign:"right"}}>{ed?<div style={{display:"flex",gap:4,justifyContent:"flex-end"}}><button style={S.btn("#16a34a")} onClick={()=>{onSave(l,o);setEd(false);}}>OK</button><button style={S.btnOutline} onClick={()=>{setL(initL);setO(initO);setEd(false);}}>X</button></div>:<span>{fmt(initL+initO)}</span>}</td><td style={S.td}><div style={{display:"flex",gap:4}}>{!ed&&<button style={{...S.btnOutline,padding:"4px 8px",fontSize:11}} onClick={()=>setEd(true)}>Modifier</button>}<button style={S.btnDanger} onClick={onDelete}>Suppr.</button></div></td></tr>);}
 
-function EpRow({ep,montant,cumul,onSave}){const[ed,setEd]=useState(false);const[v,setV]=useState(montant);useEffect(()=>{setV(montant);},[montant]);return(<tr style={{background:ed?"#fffbeb":"transparent"}}><td style={{...S.td,fontWeight:600}}>{ep.fields?.type}</td><td style={S.td}>{ep.fields?.beneficiaire}</td><td style={{...S.td,textAlign:"right"}}>{ed?<input style={S.input} type="number" value={v} onChange={e=>setV(+e.target.value)}/>:fmt(montant)}</td><td style={{...S.td,textAlign:"right",color:"#64748b"}}>{fmt(cumul)}</td><td style={S.td}>{ed?<div style={{display:"flex",gap:4}}><button style={S.btn("#16a34a")} onClick={()=>{onSave(v);setEd(false);}}>OK</button><button style={S.btnOutline} onClick={()=>{setV(montant);setEd(false);}}>X</button></div>:<button style={S.btnOutline} onClick={()=>setEd(true)}>Modifier</button>}</td></tr>);}
+function EpRow({ep,montant,cumul,onSave,onDelete}){const[ed,setEd]=useState(false);const[v,setV]=useState(montant);useEffect(()=>{setV(montant);},[montant]);return(<tr style={{background:ed?"#fffbeb":"transparent"}}><td style={{...S.td,fontWeight:600}}>{ep.fields?.type}</td><td style={S.td}>{ep.fields?.beneficiaire}</td><td style={{...S.td,textAlign:"right"}}>{ed?<input style={S.input} type="number" value={v} onChange={e=>setV(+e.target.value)}/>:fmt(montant)}</td><td style={{...S.td,textAlign:"right",color:"#64748b"}}>{fmt(cumul)}</td><td style={S.td}>{ed?<div style={{display:"flex",gap:4}}><button style={S.btn("#16a34a")} onClick={()=>{onSave(v);setEd(false);}}>OK</button><button style={S.btnOutline} onClick={()=>{setV(montant);setEd(false);}}>X</button></div>:<div style={{display:"flex",gap:4}}><button style={S.btnOutline} onClick={()=>setEd(true)}>Modifier</button><button style={S.btnDanger} onClick={onDelete}>Suppr.</button></div>}</td></tr>);}
 
-function ObjRow({obj,epargne,emByYear,onSave}){const[ed,setEd]=useState(false);const[v,setV]=useState(obj.fields?.objectif_annuel||0);const type=obj.fields?.type||"";const actual=emByYear.reduce((s,em)=>{const e=epargne.find(e=>{const l=em.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===e.id;});if(!e)return s;if(type.includes(e.fields.type)&&(type.includes(e.fields.beneficiaire)||type.includes("Commun")))return s+(em.fields.montant||0);return s;},0);const pct=v>0?(actual/v)*100:0;return(<tr style={{background:ed?"#fffbeb":"transparent"}}><td style={{...S.td,fontWeight:600}}>{type}</td><td style={{...S.td,textAlign:"right"}}>{ed?<input style={S.input} type="number" value={v} onChange={e=>setV(+e.target.value)}/>:fmt(obj.fields?.objectif_annuel)}</td><td style={{...S.td,textAlign:"right"}}>{fmt(actual)}</td><td style={S.td}><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{...S.progress,flex:1}}><div style={S.progressBar(pct,pct>=100?"#16a34a":"#2563eb")}/></div><span style={{fontSize:12,fontWeight:600,color:pct>=100?"#16a34a":"#64748b",minWidth:40}}>{pct.toFixed(0)}%</span></div></td><td style={S.td}>{ed?<div style={{display:"flex",gap:4}}><button style={S.btn("#16a34a")} onClick={()=>{onSave(v);setEd(false);}}>OK</button><button style={S.btnOutline} onClick={()=>{setV(obj.fields?.objectif_annuel||0);setEd(false);}}>X</button></div>:<button style={S.btnOutline} onClick={()=>setEd(true)}>Modifier</button>}</td></tr>);}
+function ObjRow({obj,epargne,emByYear,onSave,onDelete}){const[ed,setEd]=useState(false);const[v,setV]=useState(obj.fields?.objectif_annuel||0);const type=obj.fields?.type||"";const actual=emByYear.reduce((s,em)=>{const e=epargne.find(e=>{const l=em.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===e.id;});if(!e)return s;if(type.includes(e.fields.type)&&(type.includes(e.fields.beneficiaire)||type.includes("Commun")))return s+(em.fields.montant||0);return s;},0);const pct=v>0?(actual/v)*100:0;return(<tr style={{background:ed?"#fffbeb":"transparent"}}><td style={{...S.td,fontWeight:600}}>{type}</td><td style={{...S.td,textAlign:"right"}}>{ed?<input style={S.input} type="number" value={v} onChange={e=>setV(+e.target.value)}/>:fmt(obj.fields?.objectif_annuel)}</td><td style={{...S.td,textAlign:"right"}}>{fmt(actual)}</td><td style={S.td}><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{...S.progress,flex:1}}><div style={S.progressBar(pct,pct>=100?"#16a34a":"#2563eb")}/></div><span style={{fontSize:12,fontWeight:600,color:pct>=100?"#16a34a":"#64748b",minWidth:40}}>{pct.toFixed(0)}%</span></div></td><td style={S.td}>{ed?<div style={{display:"flex",gap:4}}><button style={S.btn("#16a34a")} onClick={()=>{onSave(v);setEd(false);}}>OK</button><button style={S.btnOutline} onClick={()=>{setV(obj.fields?.objectif_annuel||0);setEd(false);}}>X</button></div>:<div style={{display:"flex",gap:4}}><button style={S.btnOutline} onClick={()=>setEd(true)}>Modifier</button><button style={S.btnDanger} onClick={onDelete}>Suppr.</button></div>}</td></tr>);}
 
-// === MODALS ===
+// === ADD MODALS ===
 function AddChgModal({cats,onClose,onAdd}){const[desc,setDesc]=useState("");const[cat,setCat]=useState(cats[0]||"");const[newCat,setNewCat]=useState("");const[useNew,setUseNew]=useState(false);const[compte,setCompte]=useState("Commun");const[l,setL]=useState(0);const[o,setO]=useState(0);const[sel,setSel]=useState(Array.from({length:12},(_,i)=>i));const toggle=i=>setSel(p=>p.includes(i)?p.filter(m=>m!==i):[...p,i]);return(<div style={S.modal} onClick={onClose}><div style={S.modalContent} onClick={e=>e.stopPropagation()}><h3 style={{margin:"0 0 20px",fontSize:18,fontWeight:700}}>Ajouter une charge</h3><div style={{display:"flex",flexDirection:"column",gap:14}}><div><label style={{fontSize:12,fontWeight:600,color:"#64748b",marginBottom:4,display:"block"}}>Description</label><input style={S.inputFull} value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Ex: Netflix"/></div><div><label style={{fontSize:12,fontWeight:600,color:"#64748b",marginBottom:4,display:"block"}}>Catégorie</label><div style={{display:"flex",gap:8,alignItems:"center"}}>{!useNew?<select style={{...S.select,flex:1}} value={cat} onChange={e=>setCat(e.target.value)}>{cats.map(c=><option key={c}>{c}</option>)}</select>:<input style={{...S.inputFull,flex:1}} value={newCat} onChange={e=>setNewCat(e.target.value)} placeholder="Nouvelle catégorie"/>}<button style={S.btnOutline} onClick={()=>setUseNew(!useNew)}>{useNew?"Existante":"Nouvelle"}</button></div></div><div><label style={{fontSize:12,fontWeight:600,color:"#64748b",marginBottom:4,display:"block"}}>Compte</label><select style={S.select} value={compte} onChange={e=>setCompte(e.target.value)}><option value="Commun">Commun</option><option value="Perso">Perso</option></select></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}><div><label style={{fontSize:12,fontWeight:600,color:"#64748b",marginBottom:4,display:"block"}}>Montant Lionel</label><input style={S.inputFull} type="number" value={l} onChange={e=>setL(+e.target.value)}/></div><div><label style={{fontSize:12,fontWeight:600,color:"#64748b",marginBottom:4,display:"block"}}>Montant Ophélie</label><input style={S.inputFull} type="number" value={o} onChange={e=>setO(+e.target.value)}/></div></div><div><label style={{fontSize:12,fontWeight:600,color:"#64748b",marginBottom:6,display:"block"}}>Mois</label><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{MOIS.map((m,i)=><button key={i} style={S.monthBtn(sel.includes(i))} onClick={()=>toggle(i)}>{m}</button>)}</div></div><div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}><button style={S.btnOutline} onClick={onClose}>Annuler</button><button style={S.btn("#16a34a")} disabled={!desc} onClick={()=>onAdd({description:desc,categorie:useNew?newCat:cat,compte,lionel:l,ophelie:o,moisList:sel})}>Ajouter</button></div></div></div></div>);}
 
 function AddEpModal({onClose,onAdd}){const[type,setType]=useState("");const[benef,setBenef]=useState("Lionel");const[obj,setObj]=useState(0);return(<div style={S.modal} onClick={onClose}><div style={S.modalContent} onClick={e=>e.stopPropagation()}><h3 style={{margin:"0 0 20px",fontSize:18,fontWeight:700}}>Ajouter un type d'épargne</h3><div style={{display:"flex",flexDirection:"column",gap:14}}><div><label style={{fontSize:12,fontWeight:600,color:"#64748b",marginBottom:4,display:"block"}}>Type</label><input style={S.inputFull} value={type} onChange={e=>setType(e.target.value)} placeholder="Ex: PER, CTO..."/></div><div><label style={{fontSize:12,fontWeight:600,color:"#64748b",marginBottom:4,display:"block"}}>Bénéficiaire</label><select style={S.select} value={benef} onChange={e=>setBenef(e.target.value)}>{["Lionel","Ophélie","Noémie","Alizée","Commun"].map(b=><option key={b}>{b}</option>)}</select></div><div><label style={{fontSize:12,fontWeight:600,color:"#64748b",marginBottom:4,display:"block"}}>Objectif annuel</label><input style={S.inputFull} type="number" value={obj} onChange={e=>setObj(+e.target.value)}/></div><div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}><button style={S.btnOutline} onClick={onClose}>Annuler</button><button style={S.btn("#16a34a")} disabled={!type} onClick={()=>onAdd({type,beneficiaire:benef,objectif:obj})}>Ajouter</button></div></div></div></div>);}
