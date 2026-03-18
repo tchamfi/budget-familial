@@ -5,7 +5,7 @@ export async function POST(request) {
   
   if (!ANTHROPIC_KEY) {
     return NextResponse.json(
-      { error: "Clé API Anthropic non configurée." },
+      { error: "Clé API Anthropic non configurée. Ajoutez ANTHROPIC_API_KEY dans les variables d'environnement Vercel." },
       { status: 500 }
     );
   }
