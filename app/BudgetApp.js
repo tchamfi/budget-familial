@@ -339,27 +339,33 @@ function VirementCalcul({charges,chargesMontants,revenus,annee,mois}){
 // ALERTS COMPONENT
 // ============================================================
 function Alerts({revenus,chargesMontants,epargneMontants,annee,mois}){
+  const[dismissed,setDismissed]=useState(()=>{try{return JSON.parse(localStorage.getItem("budget_dismissed_alerts")||"[]");}catch{return[];}});
+  const dismiss=(key)=>{const next=[...dismissed,key];setDismissed(next);localStorage.setItem("budget_dismissed_alerts",JSON.stringify(next));};
+  const clearAll=()=>{setDismissed([]);localStorage.removeItem("budget_dismissed_alerts");};
   const cmByYear=chargesMontants.filter(r=>r.fields?.annee===annee);
   const emByYear=epargneMontants.filter(r=>r.fields?.annee===annee);
   const revByYear=revenus.filter(r=>r.fields?.annee===annee);
-  const alerts=[];
-  // Check each month
+  const allAlerts=[];
   for(let m=0;m<12;m++){
     const rev=revByYear.find(r=>r.fields?.mois===m+1);
     const revTotal=(rev?.fields?.lionel||0)+(rev?.fields?.ophelie||0);
     const chgTotal=cmByYear.filter(r=>r.fields?.mois===m+1).reduce((s,r)=>s+(r.fields?.lionel||0)+(r.fields?.ophelie||0),0);
     const epTotal=emByYear.filter(r=>r.fields?.mois===m+1).reduce((s,r)=>s+(r.fields?.montant||0),0);
     const solde=revTotal-chgTotal-epTotal;
-    if(solde<0)alerts.push({type:"danger",icon:"⚠",msg:`${MOIS_FULL[m]} : Solde négatif de ${fmt(solde)}`,month:m});
-    if(epTotal===0&&revTotal>0)alerts.push({type:"warning",icon:"💡",msg:`${MOIS_FULL[m]} : Aucune épargne enregistrée`,month:m});
-    if(chgTotal>revTotal*0.8&&revTotal>0)alerts.push({type:"warning",icon:"📊",msg:`${MOIS_FULL[m]} : Charges = ${((chgTotal/revTotal)*100).toFixed(0)}% des revenus`,month:m});
+    if(solde<0)allAlerts.push({key:`neg-${annee}-${m}`,type:"danger",icon:"⚠",msg:`${MOIS_FULL[m]} : Solde négatif de ${fmt(solde)}`});
+    if(epTotal===0&&revTotal>0)allAlerts.push({key:`noep-${annee}-${m}`,type:"warning",icon:"💡",msg:`${MOIS_FULL[m]} : Aucune épargne enregistrée`});
+    if(chgTotal>revTotal*0.8&&revTotal>0)allAlerts.push({key:`high-${annee}-${m}`,type:"warning",icon:"📊",msg:`${MOIS_FULL[m]} : Charges = ${((chgTotal/revTotal)*100).toFixed(0)}% des revenus`});
   }
-  if(alerts.length===0)alerts.push({type:"success",icon:"✓",msg:"Tout est en ordre ! Aucune alerte pour cette année."});
+  const alerts=allAlerts.filter(a=>!dismissed.includes(a.key));
   const colors={danger:{bg:"#fef2f2",border:"#fca5a5",text:"#b91c1c"},warning:{bg:"#fffbeb",border:"#fcd34d",text:"#a16207"},success:{bg:"#f0fdf4",border:"#86efac",text:"#15803d"}};
-  return(<div style={{display:"flex",flexDirection:"column",gap:8}}>{alerts.map((a,i)=>{const c=colors[a.type];return(<div key={i} className="fade-up" style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:c.bg,border:`1px solid ${c.border}`,borderRadius:12,animation:`fadeUp .3s ease ${i*0.05}s both`}}>
-    <span style={{fontSize:18}}>{a.icon}</span>
-    <span style={{fontSize:13,color:c.text,fontWeight:500}}>{a.msg}</span>
-  </div>);})}</div>);
+  return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    {dismissed.length>0&&<div style={{display:"flex",justifyContent:"flex-end",marginBottom:4}}><button className="btn-press" onClick={clearAll} style={{padding:"6px 14px",background:"transparent",border:"1px solid #ddd8d0",borderRadius:8,cursor:"pointer",fontSize:11,fontWeight:600,color:"#8a8578"}}>Réafficher les alertes ignorées ({dismissed.length})</button></div>}
+    {alerts.length===0&&<div className="fade-up" style={{display:"flex",alignItems:"center",gap:12,padding:"16px 20px",background:"#f0fdf4",border:"1px solid #86efac",borderRadius:12}}><span style={{fontSize:18}}>✓</span><span style={{fontSize:14,color:"#15803d",fontWeight:600}}>Tout est en ordre ! Aucune alerte active.</span></div>}
+    {alerts.map((a,i)=>{const c=colors[a.type];return(<div key={a.key} className="fade-up" style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:c.bg,border:`1px solid ${c.border}`,borderRadius:12,animation:`fadeUp .3s ease ${i*0.05}s both`}}>
+      <div style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:18}}>{a.icon}</span><span style={{fontSize:13,color:c.text,fontWeight:500}}>{a.msg}</span></div>
+      <button className="btn-press" onClick={()=>dismiss(a.key)} style={{padding:"4px 12px",background:"transparent",border:`1px solid ${c.border}`,borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:600,color:c.text,whiteSpace:"nowrap"}}>Ignorer</button>
+    </div>);})}
+  </div>);
 }
 
 // ============================================================
@@ -403,6 +409,10 @@ export default function BudgetApp(){
   if(loading)return(<><GlobalStyles/><div className="grain"/><div style={{minHeight:"100vh",background:"#faf9f7",display:"flex",flexDirection:"column"}}><div style={{background:"#1a1a2e",padding:"20px 36px"}}><div style={{fontFamily:"'DM Serif Display',serif",color:"#faf9f7",fontSize:22}}>Budget Familial {annee}</div></div><div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{textAlign:"center"}}><div style={{width:40,height:40,border:"3px solid #e8e4dd",borderTopColor:"#1a1a2e",borderRadius:"50%",animation:"pulse 1s infinite",margin:"0 auto 16px"}}/><p style={{color:"#8a8578",fontSize:14}}>Chargement...</p></div></div></div></>);
 
   const rev=getRevMois(mois),chgT=totalChgMois(mois),epT=totalEpMois(mois),solde=(rev.lionel+rev.ophelie)-chgT-epT;
+  // Previous month for comparison
+  const prevM=mois>0?mois-1:11;
+  const prevRev=getRevMois(prevM),prevChg=totalChgMois(prevM),prevEp=totalEpMois(prevM);
+  const prevSolde=(prevRev.lionel+prevRev.ophelie)-prevChg-prevEp;
   const CS={background:"#fff",borderRadius:16,padding:24,border:"1px solid rgba(26,26,46,0.06)",boxShadow:"0 2px 12px rgba(26,26,46,0.04)"};
   const thS={textAlign:"left",padding:"12px 14px",borderBottom:"2px solid #e8e4dd",color:"#8a8578",fontWeight:600,fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em"};
   const tdS={padding:"12px 14px",borderBottom:"1px solid #f2efeb"};
@@ -432,7 +442,7 @@ export default function BudgetApp(){
 
     {/* DASHBOARD */}
     {tab==="dashboard"&&<div style={{display:"flex",flexDirection:"column",gap:24}}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16}}>{[["Revenus",rev.lionel+rev.ophelie,"#1e40af","M7 16V4m0 0L3 8m4-4l4 4"],["Charges",chgT,"#b91c1c","M17 8V16m0 0l4-4m-4 4l-4-4"],["Épargne",epT,"#6d28d9","M12 15V3m0 12l-4-4m4 4l4-4"],["Solde",solde,solde>=0?"#15803d":"#b91c1c","M9 12l2 2 4-4"]].map(([label,val,color,path],i)=><div key={label} className={`card-hover fade-up stagger-${i+1}`} style={{...CS,borderTop:`3px solid ${color}`,position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:-20,right:-20,width:80,height:80,borderRadius:"50%",background:`${color}08`}}/><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round"><path d={path}/></svg><span style={{fontSize:11,fontWeight:600,color:"#8a8578",textTransform:"uppercase",letterSpacing:"0.08em"}}>{label}</span></div><div style={{fontFamily:"'DM Serif Display',serif",fontSize:28,color}}>{fmt(val)}</div></div>)}</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16}}>{[["Revenus",rev.lionel+rev.ophelie,prevRev.lionel+prevRev.ophelie,"#1e40af"],["Charges",chgT,prevChg,"#b91c1c"],["Épargne",epT,prevEp,"#6d28d9"],["Solde",solde,prevSolde,solde>=0?"#15803d":"#b91c1c"]].map(([label,val,prev,color],i)=>{const diff=val-prev;const pct=prev>0?((diff/prev)*100).toFixed(0):0;const up=diff>=0;const arrowPath=up?"M7 14l5-5 5 5":"M7 10l5 5 5-5";const diffColor=label==="Charges"?(up?"#b91c1c":"#15803d"):(up?"#15803d":"#b91c1c");return<div key={label} className={`card-hover fade-up stagger-${i+1}`} style={{...CS,borderTop:`3px solid ${color}`,position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:-20,right:-20,width:80,height:80,borderRadius:"50%",background:`${color}08`}}/><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><span style={{fontSize:11,fontWeight:600,color:"#8a8578",textTransform:"uppercase",letterSpacing:"0.08em"}}>{label}</span></div><div style={{fontFamily:"'DM Serif Display',serif",fontSize:28,color}}>{fmt(val)}</div>{prev>0&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:8}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={diffColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d={arrowPath}/></svg><span style={{fontSize:11,fontWeight:600,color:diffColor}}>{up?"+":""}{pct}% vs {MOIS[prevM]}</span></div>}</div>})}</div>
       <div className="fade-up stagger-3" style={CS}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:0}}>Évolution {annee}</h3><div style={{display:"flex",gap:3,background:"#f2efeb",borderRadius:9,padding:3}}>{[["bar","Barres"],["line","Lignes"],["area","Aires"]].map(([t,l])=><button key={t} className="btn-press" onClick={()=>setChartType(t)} style={{padding:"5px 14px",border:"none",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:chartType===t?600:400,background:chartType===t?"#fff":"transparent",color:chartType===t?"#1a1a2e":"#8a8578"}}>{l}</button>)}</div></div>
         <ResponsiveContainer width="100%" height={300}>{chartType==="bar"?<BarChart data={chartData} barGap={2}><CartesianGrid strokeDasharray="3 3" stroke="#f2efeb" vertical={false}/><XAxis dataKey="mois" tick={{fontSize:11,fill:"#8a8578"}} axisLine={false} tickLine={false}/><YAxis tick={{fontSize:11,fill:"#8a8578"}} axisLine={false} tickLine={false}/><Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:12,border:"none",boxShadow:"0 4px 20px rgba(0,0,0,0.08)"}}/><Legend wrapperStyle={{fontSize:12}}/><Bar dataKey="revenus" fill="#1e40af" name="Revenus" radius={[6,6,0,0]} maxBarSize={28}/><Bar dataKey="charges" fill="#b91c1c" name="Charges" radius={[6,6,0,0]} maxBarSize={28}/><Bar dataKey="epargne" fill="#6d28d9" name="Épargne" radius={[6,6,0,0]} maxBarSize={28}/></BarChart>:chartType==="line"?<LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" stroke="#f2efeb" vertical={false}/><XAxis dataKey="mois" tick={{fontSize:11,fill:"#8a8578"}} axisLine={false} tickLine={false}/><YAxis tick={{fontSize:11,fill:"#8a8578"}} axisLine={false} tickLine={false}/><Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:12,border:"none",boxShadow:"0 4px 20px rgba(0,0,0,0.08)"}}/><Legend wrapperStyle={{fontSize:12}}/><Line type="monotone" dataKey="revenus" stroke="#1e40af" strokeWidth={2.5} dot={{r:3}} name="Revenus"/><Line type="monotone" dataKey="charges" stroke="#b91c1c" strokeWidth={2.5} dot={{r:3}} name="Charges"/><Line type="monotone" dataKey="epargne" stroke="#6d28d9" strokeWidth={2.5} dot={{r:3}} name="Épargne"/></LineChart>:<AreaChart data={chartData}><CartesianGrid strokeDasharray="3 3" stroke="#f2efeb" vertical={false}/><XAxis dataKey="mois" tick={{fontSize:11,fill:"#8a8578"}} axisLine={false} tickLine={false}/><YAxis tick={{fontSize:11,fill:"#8a8578"}} axisLine={false} tickLine={false}/><Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:12,border:"none",boxShadow:"0 4px 20px rgba(0,0,0,0.08)"}}/><Legend wrapperStyle={{fontSize:12}}/><Area type="monotone" dataKey="revenus" fill="#1e40af" fillOpacity={0.08} stroke="#1e40af" strokeWidth={2} name="Revenus"/><Area type="monotone" dataKey="charges" fill="#b91c1c" fillOpacity={0.08} stroke="#b91c1c" strokeWidth={2} name="Charges"/><Area type="monotone" dataKey="epargne" fill="#6d28d9" fillOpacity={0.08} stroke="#6d28d9" strokeWidth={2} name="Épargne"/></AreaChart>}</ResponsiveContainer></div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
