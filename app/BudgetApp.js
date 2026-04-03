@@ -1388,50 +1388,70 @@ function VillesDVF({ villes, filterSecurite, setFilterSecurite, filterBudget, se
 }
 
 
+
 // ─── RECHERCHE DVF PAR RUE ───────────────────────────────────────────────────
 
-// Coordonnées centre de chaque commune pour initialiser la carte
-const COMMUNES_COORDS = {
-  '94033': { lat: 48.8527, lng: 2.4707, nom: 'Fontenay-sous-Bois', zoom: 14 },
-  '94068': { lat: 48.7964, lng: 2.5055, nom: 'Saint-Maur-des-Fossés', zoom: 13 },
-  '94080': { lat: 48.8477, lng: 2.4392, nom: 'Vincennes', zoom: 14 },
-  '94052': { lat: 48.8347, lng: 2.4817, nom: 'Nogent-sur-Marne', zoom: 14 },
-  '94058': { lat: 48.8408, lng: 2.5040, nom: 'Le Perreux-sur-Marne', zoom: 14 },
-  '94067': { lat: 48.8417, lng: 2.4208, nom: 'Saint-Mandé', zoom: 15 },
-  '94018': { lat: 48.8200, lng: 2.4148, nom: 'Charenton-le-Pont', zoom: 14 },
-  '94015': { lat: 48.8394, lng: 2.5212, nom: 'Bry-sur-Marne', zoom: 14 },
-  '94046': { lat: 48.8057, lng: 2.4361, nom: 'Maisons-Alfort', zoom: 14 },
-  '94042': { lat: 48.8181, lng: 2.4778, nom: 'Joinville-le-Pont', zoom: 14 },
-  '94055': { lat: 48.7763, lng: 2.5369, nom: 'Ormesson-sur-Marne', zoom: 14 },
-  '94002': { lat: 48.7942, lng: 2.4267, nom: 'Alfortville', zoom: 14 },
-  '94060': { lat: 48.8048, lng: 2.5706, nom: 'Le Plessis-Trévise', zoom: 14 },
-  '94071': { lat: 48.7714, lng: 2.5226, nom: 'Sucy-en-Brie', zoom: 13 },
-  '94079': { lat: 48.8286, lng: 2.5449, nom: 'Villiers-sur-Marne', zoom: 14 },
-  '94019': { lat: 48.7938, lng: 2.5437, nom: 'Chennevières-sur-Marne', zoom: 14 },
-  '94038': { lat: 48.7791, lng: 2.5716, nom: 'La Queue-en-Brie', zoom: 14 },
-  '94017': { lat: 48.8171, lng: 2.5143, nom: 'Champigny-sur-Marne', zoom: 13 },
-  '94028': { lat: 48.7773, lng: 2.4591, nom: 'Créteil', zoom: 13 },
-};
+// Coordonnées de fallback pour la carte initiale (centre Île-de-France)
+const DEFAULT_MAP_CENTER = { lat: 48.8566, lng: 2.3522, zoom: 11 };
 
 function RechercheRueDVF({ styles }) {
-  const [commune, setCommune]   = useState('94033');
+  const [communeInput, setCommuneInput] = useState('');
+  const [communeSuggestions, setCommuneSuggestions] = useState([]);
+  const [communeSelectee, setCommuneSelectee] = useState(null); // { code, nom, cp }
   const [rue, setRue]           = useState('');
   const [results, setResults]   = useState(null);
   const [loading, setLoading]   = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [error, setError]       = useState(null);
   const [mapReady, setMapReady] = useState(false);
   const [viewMode, setViewMode] = useState('split');
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
-  const leafletMap   = useRef(null);
-  const markersLayer = useRef(null);
-  const mapContainer = useRef(null);
-  // ── FIX : ref qui reste synchronisée avec le state commune ──
-  const communeRef   = useRef(commune);
-  useEffect(() => { communeRef.current = commune; }, [commune]);
+  const leafletMap      = useRef(null);
+  const markersLayer    = useRef(null);
+  const mapContainer    = useRef(null);
+  const communeRef      = useRef(null); // toujours synchronisé avec communeSelectee
+  const suggestTimer    = useRef(null);
 
-  const COMMUNES = Object.entries(COMMUNES_COORDS)
-    .map(([code, v]) => ({ code, nom: v.nom }))
-    .sort((a, b) => a.nom.localeCompare(b.nom));
+  useEffect(() => { communeRef.current = communeSelectee; }, [communeSelectee]);
+
+  // Autocomplétion commune via geo.api.gouv.fr
+  const rechercherCommunes = (val) => {
+    setCommuneInput(val);
+    setCommuneSelectee(null);
+    clearTimeout(suggestTimer.current);
+    if (val.length < 2) { setCommuneSuggestions([]); setShowSuggestions(false); return; }
+    suggestTimer.current = setTimeout(async () => {
+      setLoadingSuggestions(true);
+      try {
+        const res = await fetch(
+          `https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(val)}&fields=code,nom,codesPostaux,departement&limit=8&boost=population`
+        );
+        const data = await res.json();
+        setCommuneSuggestions(data || []);
+        setShowSuggestions(true);
+      } catch { setCommuneSuggestions([]); }
+      setLoadingSuggestions(false);
+    }, 250);
+  };
+
+  const choisirCommune = (commune) => {
+    setCommuneSelectee({ code: commune.code, nom: commune.nom, cp: commune.codesPostaux?.[0] || '' });
+    setCommuneInput(`${commune.nom} (${commune.departement?.nom || commune.codesPostaux?.[0] || ''})`);
+    setCommuneSuggestions([]);
+    setShowSuggestions(false);
+    // Recentrer la carte sur la commune via Nominatim
+    if (leafletMap.current) {
+      fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(commune.nom)}&countrycodes=fr&limit=1&format=json`,
+        { headers: { 'User-Agent': 'BudgetFamilialTchamfong/1.0' } })
+        .then(r => r.json())
+        .then(data => {
+          if (data[0]) {
+            leafletMap.current.setView([parseFloat(data[0].lat), parseFloat(data[0].lon)], 14);
+          }
+        }).catch(() => {});
+    }
+  };
 
   // Charger Leaflet dynamiquement
   useEffect(() => {
@@ -1449,20 +1469,15 @@ function RechercheRueDVF({ styles }) {
   // Initialiser la carte (une seule fois)
   useEffect(() => {
     if (!mapReady || !mapContainer.current || leafletMap.current) return;
-
-    const coords = COMMUNES_COORDS['94033'];
     const map = window.L.map(mapContainer.current, { zoomControl: true })
-      .setView([coords.lat, coords.lng], coords.zoom);
-
+      .setView([DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng], DEFAULT_MAP_CENTER.zoom);
     window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(map);
-
     markersLayer.current = window.L.layerGroup().addTo(map);
 
-    // Clic sur la carte → géocode via Nominatim
-    // ── FIX : on lit communeRef.current (toujours à jour) ──
+    // Clic sur la carte → géocode via Nominatim, détecte commune + rue
     map.on('click', async (e) => {
       const { lat, lng } = e.latlng;
       try {
@@ -1474,67 +1489,46 @@ function RechercheRueDVF({ styles }) {
         const road = data.address?.road || data.address?.pedestrian || data.address?.street;
         if (!road) return;
 
-        // Extraire nom de rue sans le type
         const nomRue = road
           .replace(/^(rue|avenue|av\.?|boulevard|bd\.?|impasse|allée|all\.?|chemin|place|pl\.?|villa|clos|résidence|rés\.?|res\.?|square|sq\.?|passage|voie)\s+/i, '')
           .toUpperCase();
 
-        // Détecter la commune depuis Nominatim
-        const ville = (data.address?.city || data.address?.town || data.address?.village || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const cp    = data.address?.postcode || '';
+        // Détecter la commune depuis Nominatim → chercher le code INSEE via geo.api
+        const villeNom = data.address?.city || data.address?.town || data.address?.village || data.address?.municipality || '';
+        const cp       = data.address?.postcode || '';
 
-        // Chercher la commune correspondante dans nos 19 communes
-        let codeDetecte = null;
-        if (ville) {
-          const match = Object.entries(COMMUNES_COORDS).find(([, v]) => {
-            const nomNorm = v.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            return nomNorm.includes(ville.substring(0, 6)) || ville.includes(nomNorm.substring(0, 6));
-          });
-          if (match) codeDetecte = match[0];
-        }
-        // Fallback sur code postal (94XXX → chercher dans nos codes INSEE)
-        if (!codeDetecte && cp.startsWith('94')) {
-          const cpNum = parseInt(cp);
-          const matchCp = Object.keys(COMMUNES_COORDS).find(code => {
-            const insee = parseInt(code);
-            return Math.abs(insee - cpNum) < 5;
-          });
-          if (matchCp) codeDetecte = matchCp;
-        }
-
-        const communeFinale = codeDetecte || communeRef.current;
-
-        // Mettre à jour le sélecteur si commune détectée
-        if (codeDetecte && codeDetecte !== communeRef.current) {
-          setCommune(codeDetecte);
-          // communeRef se met à jour via useEffect, mais on passe communeFinale directement
+        if (villeNom) {
+          try {
+            const geoRes = await fetch(
+              `https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(villeNom)}&codePostal=${cp}&fields=code,nom,codesPostaux,departement&limit=1`
+            );
+            const geoData = await geoRes.json();
+            if (geoData[0]) {
+              const c = geoData[0];
+              const nouvelleCommune = { code: c.code, nom: c.nom, cp: c.codesPostaux?.[0] || cp };
+              setCommuneSelectee(nouvelleCommune);
+              setCommuneInput(`${c.nom} (${c.departement?.nom || cp})`);
+              setRue(nomRue);
+              await lancerRecherche(nomRue, nouvelleCommune);
+              return;
+            }
+          } catch {}
         }
 
+        // Fallback : utiliser commune déjà sélectionnée si dispo
         setRue(nomRue);
-        // Lancer la recherche avec les valeurs correctes
-        await lancerRecherche(nomRue, communeFinale);
-
-      } catch (err) {
-        console.error('Nominatim error:', err);
-      }
+        if (communeRef.current) await lancerRecherche(nomRue, communeRef.current);
+      } catch (err) { console.error('Nominatim error:', err); }
     });
 
     leafletMap.current = map;
     setTimeout(() => map.invalidateSize(), 100);
   }, [mapReady]);
 
-  // Recentrer la carte quand la commune change
-  useEffect(() => {
-    if (!leafletMap.current) return;
-    const coords = COMMUNES_COORDS[commune];
-    if (coords) leafletMap.current.setView([coords.lat, coords.lng], coords.zoom);
-  }, [commune]);
-
   // Afficher les marqueurs quand les résultats changent
   useEffect(() => {
     if (!leafletMap.current || !markersLayer.current || !results) return;
     markersLayer.current.clearLayers();
-
     results.transactions.forEach(t => {
       if (!t.lat || !t.lng) return;
       const icon = window.L.divIcon({
@@ -1557,20 +1551,19 @@ function RechercheRueDVF({ styles }) {
       `);
       markersLayer.current.addLayer(marker);
     });
-
     if (results.transactions.filter(t => t.lat).length > 0) {
       const latlngs = results.transactions.filter(t => t.lat).map(t => [t.lat, t.lng]);
       leafletMap.current.fitBounds(latlngs, { padding: [30, 30], maxZoom: 16 });
     }
   }, [results]);
 
-  const lancerRecherche = async (nomRue, codeCommune) => {
+  const lancerRecherche = async (nomRue, commune) => {
     const r = nomRue  !== undefined ? nomRue  : rue;
-    const c = codeCommune !== undefined ? codeCommune : communeRef.current;
-    if (!r.trim()) return;
+    const c = commune !== undefined ? commune : communeRef.current;
+    if (!r.trim() || !c) return;
     setLoading(true); setError(null); setResults(null);
     try {
-      const res = await fetch(`/api/dvf?mode=rue&commune=${c}&rue=${encodeURIComponent(r.trim())}`);
+      const res = await fetch(`/api/dvf?mode=rue&commune=${c.code}&rue=${encodeURIComponent(r.trim())}`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setResults(data);
@@ -1596,7 +1589,7 @@ function RechercheRueDVF({ styles }) {
       <div style={{ background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 16, padding: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>
-            🗺️ Recherche DVF par rue — cliquez sur la carte ou saisissez un nom
+            🗺️ Recherche DVF par rue — France entière · cliquez sur la carte ou saisissez
           </h3>
           <div style={{ display: 'flex', background: '#f0ead8', borderRadius: 8, padding: 3, gap: 2 }}>
             {[['split', '⬛⬛ Mixte'], ['map', '🗺️ Carte'], ['table', '📋 Tableau']].map(([v, l]) => (
@@ -1610,13 +1603,52 @@ function RechercheRueDVF({ styles }) {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr auto', gap: 10, alignItems: 'end' }}>
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: '#5a7a9a', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>Commune</label>
-            <select value={commune} onChange={e => setCommune(e.target.value)} style={{ ...styles.select, width: '100%' }}>
-              {COMMUNES.map(c => <option key={c.code} value={c.code}>{c.nom}</option>)}
-            </select>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+          {/* Champ commune libre avec autocomplétion */}
+          <div style={{ position: 'relative' }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#5a7a9a', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>
+              Commune {loadingSuggestions && <span style={{ color: '#c9a84c' }}>⏳</span>}
+              {communeSelectee && <span style={{ color: '#16a34a', marginLeft: 4 }}>✓</span>}
+            </label>
+            <input
+              type="text"
+              value={communeInput}
+              onChange={e => rechercherCommunes(e.target.value)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+              onFocus={() => communeSuggestions.length > 0 && setShowSuggestions(true)}
+              placeholder="Fontenay-sous-Bois, Lyon, Bordeaux…"
+              style={{ ...styles.input, width: '100%', paddingRight: 12,
+                borderColor: communeSelectee ? '#16a34a' : undefined }}
+            />
+            {showSuggestions && communeSuggestions.length > 0 && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000,
+                background: '#fff', border: '1px solid #e8dcc8', borderRadius: 10,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)', marginTop: 4, overflow: 'hidden',
+              }}>
+                {communeSuggestions.map((c, i) => (
+                  <div
+                    key={c.code}
+                    onMouseDown={() => choisirCommune(c)}
+                    style={{
+                      padding: '10px 14px', cursor: 'pointer', fontSize: 13,
+                      borderBottom: i < communeSuggestions.length - 1 ? '1px solid #f0ead8' : 'none',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#fef9f0'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+                  >
+                    <span style={{ fontWeight: 600, color: '#1a3a5c' }}>{c.nom}</span>
+                    <span style={{ fontSize: 11, color: '#8a9ab0' }}>
+                      {c.departement?.nom || ''} · {c.codesPostaux?.[0] || c.code}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
+
+          {/* Champ rue */}
           <div>
             <label style={{ fontSize: 11, fontWeight: 600, color: '#5a7a9a', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>
               Nom de rue <span style={{ color: '#c4b898', fontWeight: 400 }}>(ou cliquez sur la carte)</span>
@@ -1625,20 +1657,28 @@ function RechercheRueDVF({ styles }) {
               type="text" value={rue}
               onChange={e => setRue(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && lancerRecherche()}
-              placeholder="ex: BEAUMONTS, GAMBETTA, VICTOR HUGO…"
+              placeholder="ex: BEAUMONTS, GAMBETTA…"
               style={{ ...styles.input, width: '100%', paddingRight: 12 }}
             />
           </div>
-          <button onClick={() => lancerRecherche()} disabled={loading || !rue.trim()} style={{
-            padding: '10px 20px', background: loading ? '#8a9ab0' : '#c9a84c',
-            color: '#fff', border: 'none', borderRadius: 8,
-            cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 13,
-          }}>
+
+          <button
+            onClick={() => lancerRecherche()}
+            disabled={loading || !rue.trim() || !communeSelectee}
+            title={!communeSelectee ? 'Sélectionnez une commune' : ''}
+            style={{
+              padding: '10px 20px',
+              background: loading ? '#8a9ab0' : !communeSelectee ? '#d4c5a0' : '#c9a84c',
+              color: '#fff', border: 'none', borderRadius: 8,
+              cursor: loading || !communeSelectee ? 'not-allowed' : 'pointer',
+              fontWeight: 700, fontSize: 13,
+            }}>
             {loading ? '⏳' : '🔍 Chercher'}
           </button>
         </div>
+
         <p style={{ fontSize: 11, color: '#8a9ab0', marginTop: 8 }}>
-          Source : data.gouv.fr — DVF DGFiP · Maisons uniquement · 2020 → juin 2025
+          Source : data.gouv.fr — DVF DGFiP · Maisons uniquement · 2020 → juin 2025 · 200 ventes les plus récentes
         </p>
       </div>
 
@@ -1694,6 +1734,7 @@ function RechercheRueDVF({ styles }) {
                     <div style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>{results.rue} — {results.commune}</div>
                     <div style={{ fontSize: 11, color: '#8a9ab0', marginTop: 2 }}>
                       {results.nb} vente{results.nb > 1 ? 's' : ''} de maison{results.nb > 1 ? 's' : ''}
+                      {results.nb === 200 && <span style={{ color: '#c9a84c', marginLeft: 4 }}>· 200 plus récentes</span>}
                     </div>
                   </div>
                   {mediane && (
@@ -1705,11 +1746,10 @@ function RechercheRueDVF({ styles }) {
                 </>
               ) : (
                 <div style={{ color: '#8a9ab0', fontSize: 13 }}>
-                  {loading ? 'Chargement…' : 'Cliquez sur la carte ou cherchez une rue'}
+                  {loading ? 'Chargement…' : 'Sélectionnez une commune et cherchez une rue'}
                 </div>
               )}
             </div>
-
             <div style={{ flex: 1, overflowY: 'auto', maxHeight: 456 }}>
               {results?.nb === 0 && (
                 <div style={{ textAlign: 'center', padding: '32px 16px', color: '#8a9ab0', fontSize: 13 }}>
@@ -1718,19 +1758,9 @@ function RechercheRueDVF({ styles }) {
                 </div>
               )}
               {results?.transactions?.map((t, i) => (
-                <div
-                  key={i}
-                  onClick={() => {
-                    if (t.lat && leafletMap.current) {
-                      leafletMap.current.setView([t.lat, t.lng], 17);
-                      setViewMode('split');
-                    }
-                  }}
-                  style={{
-                    padding: '12px 20px', borderBottom: '1px solid #f0ead8',
-                    cursor: t.lat ? 'pointer' : 'default',
-                    background: i % 2 === 0 ? 'transparent' : '#faf7f2',
-                  }}
+                <div key={i}
+                  onClick={() => { if (t.lat && leafletMap.current) { leafletMap.current.setView([t.lat, t.lng], 17); setViewMode('split'); }}}
+                  style={{ padding: '12px 20px', borderBottom: '1px solid #f0ead8', cursor: t.lat ? 'pointer' : 'default', background: i % 2 === 0 ? 'transparent' : '#faf7f2' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#fef9f0'}
                   onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : '#faf7f2'}
                 >
@@ -1750,7 +1780,7 @@ function RechercheRueDVF({ styles }) {
                       </div>
                     </div>
                   </div>
-                  {t.lat && <div style={{ fontSize: 10, color: '#c4b898', marginTop: 4 }}>📍 Cliquer pour localiser sur la carte</div>}
+                  {t.lat && <div style={{ fontSize: 10, color: '#c4b898', marginTop: 4 }}>📍 Cliquer pour localiser</div>}
                 </div>
               ))}
             </div>
