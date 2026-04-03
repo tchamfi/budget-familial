@@ -588,8 +588,6 @@ const ANNONCES_BASE = [
 
 // ─── UTILS ──────────────────────────────────────────────────────────────────
 
-const fmt = (n) =>
-  Math.round(n).toLocaleString('fr-FR') + '\u00a0€';
 
 function calcMensualite(capital, tauxAnnuel, dureeAns) {
   if (capital <= 0) return 0;
