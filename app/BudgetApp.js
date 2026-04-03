@@ -550,25 +550,25 @@ export default function BudgetApp(){
 const TAUX = { 15: 2.85, 20: 3.05, 25: 3.20 };
 
 const VILLES = [
-  { nom: 'Saint-Mandé',           prixM2: 9800, securite: 5, transport: ['Métro 1'] },
-  { nom: 'Vincennes',              prixM2: 8900, securite: 5, transport: ['Métro 1', 'RER A'] },
-  { nom: 'Charenton-le-Pont',     prixM2: 7800, securite: 4, transport: ['Métro 8'] },
-  { nom: 'Nogent-sur-Marne',      prixM2: 7200, securite: 5, transport: ['RER A', 'RER E'] },
-  { nom: 'Le Perreux-sur-Marne',  prixM2: 6500, securite: 4, transport: ['RER A', 'RER E'] },
-  { nom: 'Saint-Maur-des-Fossés', prixM2: 6100, securite: 5, transport: ['RER A'] },
-  { nom: 'Bry-sur-Marne',         prixM2: 5900, securite: 4, transport: ['RER A'] },
-  { nom: 'Fontenay-sous-Bois',    prixM2: 5800, securite: 4, transport: ['RER A', 'Métro 1'] },
-  { nom: 'Maisons-Alfort',        prixM2: 5600, securite: 4, transport: ['Métro 8', 'RER D'] },
-  { nom: 'Joinville-le-Pont',     prixM2: 5500, securite: 4, transport: ['RER A'] },
-  { nom: 'Ormesson-sur-Marne',    prixM2: 5200, securite: 5, transport: ['Bus', 'RER proche'] },
-  { nom: 'Alfortville',           prixM2: 4800, securite: 3, transport: ['RER D', 'Métro 8'] },
-  { nom: 'Le Plessis-Trévise',    prixM2: 4800, securite: 4, transport: ['Bus'] },
-  { nom: 'Sucy-en-Brie',          prixM2: 4600, securite: 4, transport: ['RER A'] },
-  { nom: 'Villiers-sur-Marne',    prixM2: 4500, securite: 3, transport: ['RER E'] },
-  { nom: 'Chennevières-sur-Marne',prixM2: 4400, securite: 4, transport: ['Bus'] },
-  { nom: 'La Queue-en-Brie',      prixM2: 4300, securite: 4, transport: ['Bus'] },
-  { nom: 'Champigny-sur-Marne',   prixM2: 4200, securite: 3, transport: ['RER A', 'RER E'] },
-  { nom: 'Créteil',               prixM2: 4100, securite: 3, transport: ['Métro 8'] },
+  { nom: 'Saint-Mandé',           insee: '94067', prixM2: 9800, securite: 5, transport: ['Métro 1'] },
+  { nom: 'Vincennes',              insee: '94080', prixM2: 8900, securite: 5, transport: ['Métro 1', 'RER A'] },
+  { nom: 'Charenton-le-Pont',     insee: '94018', prixM2: 7800, securite: 4, transport: ['Métro 8'] },
+  { nom: 'Nogent-sur-Marne',      insee: '94052', prixM2: 7200, securite: 5, transport: ['RER A', 'RER E'] },
+  { nom: 'Le Perreux-sur-Marne',  insee: '94058', prixM2: 6500, securite: 4, transport: ['RER A', 'RER E'] },
+  { nom: 'Saint-Maur-des-Fossés', insee: '94068', prixM2: 6100, securite: 5, transport: ['RER A'] },
+  { nom: 'Bry-sur-Marne',         insee: '94015', prixM2: 5900, securite: 4, transport: ['RER A'] },
+  { nom: 'Fontenay-sous-Bois',    insee: '94033', prixM2: 5800, securite: 4, transport: ['RER A', 'Métro 1'] },
+  { nom: 'Maisons-Alfort',        insee: '94046', prixM2: 5600, securite: 4, transport: ['Métro 8', 'RER D'] },
+  { nom: 'Joinville-le-Pont',     insee: '94042', prixM2: 5500, securite: 4, transport: ['RER A'] },
+  { nom: 'Ormesson-sur-Marne',    insee: '94055', prixM2: 5200, securite: 5, transport: ['Bus', 'RER proche'] },
+  { nom: 'Alfortville',           insee: '94002', prixM2: 4800, securite: 3, transport: ['RER D', 'Métro 8'] },
+  { nom: 'Le Plessis-Trévise',    insee: '94060', prixM2: 4800, securite: 4, transport: ['Bus'] },
+  { nom: 'Sucy-en-Brie',          insee: '94071', prixM2: 4600, securite: 4, transport: ['RER A'] },
+  { nom: 'Villiers-sur-Marne',    insee: '94079', prixM2: 4500, securite: 3, transport: ['RER E'] },
+  { nom: 'Chennevières-sur-Marne',insee: '94019', prixM2: 4400, securite: 4, transport: ['Bus'] },
+  { nom: 'La Queue-en-Brie',      insee: '94038', prixM2: 4300, securite: 4, transport: ['Bus'] },
+  { nom: 'Champigny-sur-Marne',   insee: '94017', prixM2: 4200, securite: 3, transport: ['RER A', 'RER E'] },
+  { nom: 'Créteil',               insee: '94028', prixM2: 4100, securite: 3, transport: ['Métro 8'] },
 ];
 
 const ANNONCES_BASE = [
@@ -1059,52 +1059,19 @@ function SimulateurImmobilier() {
           TAB : VILLES
       ════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'villes' && (
-        <div>
-          <Card title="🎯 Filtres">
-            <div style={styles.formGrid}>
-              <FormField label="Budget max" suffix="€">
-                <NumInput value={filterBudget} onChange={setFilterBudget} />
-              </FormField>
-              <FormField label="Sécurité minimum">
-                <select
-                  value={filterSecurite}
-                  onChange={e => setFilterSecurite(+e.target.value)}
-                  style={styles.select}
-                >
-                  <option value={3}>3+ étoiles</option>
-                  <option value={4}>4+ étoiles</option>
-                  <option value={5}>5 étoiles</option>
-                </select>
-              </FormField>
-            </div>
-          </Card>
-
-          <div style={styles.villesGrid}>
-            {VILLES
-              .filter(v => v.securite >= filterSecurite)
-              .map((v, i) => {
-                const prix     = v.prixM2 * surfaceMin;
-                const inBudget = prix <= filterBudget;
-                return (
-                  <div key={i} style={{
-                    ...styles.villeCard,
-                    borderLeft: `3px solid ${inBudget ? '#22c55e' : '#f59e0b'}`,
-                  }}>
-                    <p style={{ fontWeight: 600, fontSize: 14, color: '#1a3a5c' }}>{v.nom}</p>
-                    <p style={{ fontSize: 12, color: '#8a9ab0' }}>
-                      {v.prixM2.toLocaleString('fr-FR')} €/m²
-                    </p>
-                    <p style={{ fontSize: 13, fontWeight: 600, color: inBudget ? '#16a34a' : '#d97706', marginTop: 2 }}>
-                      {fmt(prix)}
-                    </p>
-                    <p style={{ fontSize: 11, color: '#8a9ab0', marginTop: 4 }}>
-                      {'⭐'.repeat(v.securite)} • {v.transport[0]}
-                    </p>
-                  </div>
-                );
-              })}
-          </div>
-        </div>
+        <VillesDVF
+          villes={VILLES}
+          filterSecurite={filterSecurite}
+          setFilterSecurite={setFilterSecurite}
+          filterBudget={filterBudget}
+          setFilterBudget={setFilterBudget}
+          surfaceMin={surfaceMin}
+          fmtFn={fmt}
+          styles={styles}
+          FormField={FormField}
+          NumInput={NumInput}
+          Card={Card}
+        />
       )}
 
       {/* ── Footer ── */}
@@ -1258,6 +1225,158 @@ function ApportRow({ label, value, indent, total, bold, color }) {
       <span style={{ fontWeight: bold || total ? 700 : 500, color: color || '#1a3a5c' }}>
         {value}
       </span>
+    </div>
+  );
+}
+
+
+// ─── COMPOSANT VILLES DVF ────────────────────────────────────────────────────
+
+function VillesDVF({ villes, filterSecurite, setFilterSecurite, filterBudget, setFilterBudget, surfaceMin, fmtFn, styles, FormField, NumInput, Card }) {
+  const [dvfData, setDvfData] = useState({}); // { insee: { prixM2, nb, date, loading, error } }
+  const [loaded, setLoaded] = useState(false);
+
+  const villesFiltrees = villes.filter(v => v.securite >= filterSecurite);
+
+  useEffect(() => {
+    if (loaded) return;
+    setLoaded(true);
+
+    // Charger les prix DVF pour toutes les communes filtrées en parallèle
+    const fetchAll = async () => {
+      // Init loading state
+      const init = {};
+      villesFiltrees.forEach(v => { init[v.insee] = { loading: true, prixM2: null, nb: 0, date: null, error: false }; });
+      setDvfData(init);
+
+      // Fetch en parallèle par batch de 5
+      const batchSize = 5;
+      for (let i = 0; i < villesFiltrees.length; i += batchSize) {
+        const batch = villesFiltrees.slice(i, i + batchSize);
+        await Promise.all(batch.map(async (v) => {
+          try {
+            const res = await fetch(`/api/dvf?code_commune=${v.insee}`);
+            const data = await res.json();
+            setDvfData(prev => ({
+              ...prev,
+              [v.insee]: {
+                loading: false,
+                prixM2: data.prix_m2_median,
+                nb: data.nb_transactions,
+                date: data.derniere_mutation,
+                error: !data.prix_m2_median,
+              }
+            }));
+          } catch {
+            setDvfData(prev => ({
+              ...prev,
+              [v.insee]: { loading: false, prixM2: null, nb: 0, date: null, error: true }
+            }));
+          }
+        }));
+      }
+    };
+
+    fetchAll();
+  }, [filterSecurite]);
+
+  // Reset quand le filtre sécurité change
+  useEffect(() => { setLoaded(false); }, [filterSecurite]);
+
+  return (
+    <div>
+      <Card title="🎯 Filtres">
+        <div style={styles.formGrid}>
+          <FormField label="Budget max" suffix="€">
+            <NumInput value={filterBudget} onChange={setFilterBudget} />
+          </FormField>
+          <FormField label="Sécurité minimum">
+            <select value={filterSecurite} onChange={e => setFilterSecurite(+e.target.value)} style={styles.select}>
+              <option value={3}>3+ étoiles</option>
+              <option value={4}>4+ étoiles</option>
+              <option value={5}>5 étoiles</option>
+            </select>
+          </FormField>
+        </div>
+        {/* Légende source */}
+        <div style={{ marginTop: 12, padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, fontSize: 11, color: '#166534', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span>📊</span>
+          <span><strong>Prix réels DVF</strong> — Transactions maisons 2022-2025 · Source DGFiP / data.gouv.fr · Médiane sur 3 ans</span>
+        </div>
+      </Card>
+
+      <div style={styles.villesGrid}>
+        {villesFiltrees.map((v, i) => {
+          const dvf    = dvfData[v.insee];
+          const prixM2 = dvf?.prixM2 || v.prixM2; // Fallback données statiques
+          const prix   = prixM2 * surfaceMin;
+          const inBudget = prix <= filterBudget;
+          const isLoading = dvf?.loading;
+          const isReal = dvf?.prixM2 && !dvf?.error;
+
+          // Variation vs données statiques
+          const diff = dvf?.prixM2 ? Math.round(((dvf.prixM2 - v.prixM2) / v.prixM2) * 100) : null;
+
+          return (
+            <div key={i} style={{
+              ...styles.villeCard,
+              borderLeft: `3px solid ${inBudget ? '#22c55e' : '#f59e0b'}`,
+              opacity: isLoading ? 0.7 : 1,
+              transition: 'opacity 0.3s',
+            }}>
+              <p style={{ fontWeight: 700, fontSize: 13, color: '#1a3a5c', marginBottom: 4 }}>{v.nom}</p>
+
+              {/* Prix/m² */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                {isLoading ? (
+                  <span style={{ fontSize: 11, color: '#8a9ab0' }}>Chargement DVF…</span>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: isReal ? '#1a3a5c' : '#8a9ab0' }}>
+                      {prixM2.toLocaleString('fr-FR')} €/m²
+                    </span>
+                    {isReal && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 600, padding: '1px 5px',
+                        borderRadius: 4,
+                        background: '#dcfce7', color: '#166534',
+                      }}>DVF</span>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Variation vs estimation initiale */}
+              {diff !== null && !isLoading && (
+                <p style={{
+                  fontSize: 10, color: diff > 0 ? '#dc2626' : '#16a34a',
+                  marginBottom: 2, fontWeight: 600,
+                }}>
+                  {diff > 0 ? '▲' : '▼'} {Math.abs(diff)}% vs estimation
+                </p>
+              )}
+
+              {/* Prix total */}
+              <p style={{ fontSize: 13, fontWeight: 700, color: inBudget ? '#16a34a' : '#d97706', marginBottom: 4 }}>
+                {fmtFn(prix)}
+              </p>
+
+              {/* Infos complémentaires */}
+              <p style={{ fontSize: 10, color: '#8a9ab0' }}>
+                {'⭐'.repeat(v.securite)} · {v.transport[0]}
+              </p>
+              {dvf?.nb > 0 && !isLoading && (
+                <p style={{ fontSize: 10, color: '#8a9ab0', marginTop: 2 }}>
+                  {dvf.nb} ventes · jusqu&apos;à {dvf.date ? new Date(dvf.date).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' }) : '—'}
+                </p>
+              )}
+              {dvf?.error && !isLoading && (
+                <p style={{ fontSize: 10, color: '#f59e0b', marginTop: 2 }}>⚠ Données DVF indisponibles</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
