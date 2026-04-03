@@ -1420,14 +1420,17 @@ function RechercheRueDVF({ styles }) {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState(null);
   const [mapReady, setMapReady] = useState(false);
-  const [viewMode, setViewMode] = useState('split'); // 'split' | 'map' | 'table'
+  const [viewMode, setViewMode] = useState('split');
 
-  const mapRef       = useRef(null);
   const leafletMap   = useRef(null);
   const markersLayer = useRef(null);
   const mapContainer = useRef(null);
+  // ── FIX : ref qui reste synchronisée avec le state commune ──
+  const communeRef   = useRef(commune);
+  useEffect(() => { communeRef.current = commune; }, [commune]);
 
-  const COMMUNES = Object.entries(COMMUNES_COORDS).map(([code, v]) => ({ code, nom: v.nom }))
+  const COMMUNES = Object.entries(COMMUNES_COORDS)
+    .map(([code, v]) => ({ code, nom: v.nom }))
     .sort((a, b) => a.nom.localeCompare(b.nom));
 
   // Charger Leaflet dynamiquement
@@ -1441,16 +1444,15 @@ function RechercheRueDVF({ styles }) {
     script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
     script.onload = () => setMapReady(true);
     document.head.appendChild(script);
-    return () => {}; // Leaflet reste chargé
   }, []);
 
-  // Initialiser la carte
+  // Initialiser la carte (une seule fois)
   useEffect(() => {
-    if (!mapReady || !mapContainer.current) return;
-    if (leafletMap.current) return; // déjà initialisée
+    if (!mapReady || !mapContainer.current || leafletMap.current) return;
 
-    const coords = COMMUNES_COORDS[commune] || COMMUNES_COORDS['94033'];
-    const map = window.L.map(mapContainer.current, { zoomControl: true }).setView([coords.lat, coords.lng], coords.zoom);
+    const coords = COMMUNES_COORDS['94033'];
+    const map = window.L.map(mapContainer.current, { zoomControl: true })
+      .setView([coords.lat, coords.lng], coords.zoom);
 
     window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -1459,7 +1461,8 @@ function RechercheRueDVF({ styles }) {
 
     markersLayer.current = window.L.layerGroup().addTo(map);
 
-    // Clic sur la carte → géocode la rue via Nominatim et lance la recherche
+    // Clic sur la carte → géocode via Nominatim
+    // ── FIX : on lit communeRef.current (toujours à jour) ──
     map.on('click', async (e) => {
       const { lat, lng } = e.latlng;
       try {
@@ -1469,21 +1472,56 @@ function RechercheRueDVF({ styles }) {
         );
         const data = await res.json();
         const road = data.address?.road || data.address?.pedestrian || data.address?.street;
-        if (road) {
-          // Extraire le nom sans le type (RUE, AVENUE, etc.)
-          const nomRue = road.replace(/^(rue|avenue|av|boulevard|bd|impasse|allée|all|chemin|place|pl|villa|clos|résidence|res|square|sq|passage)\.?\s+/i, '').toUpperCase();
-          setRue(nomRue);
-          // Lancer la recherche automatiquement
-          await lancerRecherche(nomRue, commune);
+        if (!road) return;
+
+        // Extraire nom de rue sans le type
+        const nomRue = road
+          .replace(/^(rue|avenue|av\.?|boulevard|bd\.?|impasse|allée|all\.?|chemin|place|pl\.?|villa|clos|résidence|rés\.?|res\.?|square|sq\.?|passage|voie)\s+/i, '')
+          .toUpperCase();
+
+        // Détecter la commune depuis Nominatim
+        const ville = (data.address?.city || data.address?.town || data.address?.village || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const cp    = data.address?.postcode || '';
+
+        // Chercher la commune correspondante dans nos 19 communes
+        let codeDetecte = null;
+        if (ville) {
+          const match = Object.entries(COMMUNES_COORDS).find(([, v]) => {
+            const nomNorm = v.nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            return nomNorm.includes(ville.substring(0, 6)) || ville.includes(nomNorm.substring(0, 6));
+          });
+          if (match) codeDetecte = match[0];
         }
-      } catch {}
+        // Fallback sur code postal (94XXX → chercher dans nos codes INSEE)
+        if (!codeDetecte && cp.startsWith('94')) {
+          const cpNum = parseInt(cp);
+          const matchCp = Object.keys(COMMUNES_COORDS).find(code => {
+            const insee = parseInt(code);
+            return Math.abs(insee - cpNum) < 5;
+          });
+          if (matchCp) codeDetecte = matchCp;
+        }
+
+        const communeFinale = codeDetecte || communeRef.current;
+
+        // Mettre à jour le sélecteur si commune détectée
+        if (codeDetecte && codeDetecte !== communeRef.current) {
+          setCommune(codeDetecte);
+          // communeRef se met à jour via useEffect, mais on passe communeFinale directement
+        }
+
+        setRue(nomRue);
+        // Lancer la recherche avec les valeurs correctes
+        await lancerRecherche(nomRue, communeFinale);
+
+      } catch (err) {
+        console.error('Nominatim error:', err);
+      }
     });
 
     leafletMap.current = map;
-
-    // Fix Leaflet dans une div flex
     setTimeout(() => map.invalidateSize(), 100);
-  }, [mapReady, mapContainer.current]);
+  }, [mapReady]);
 
   // Recentrer la carte quand la commune change
   useEffect(() => {
@@ -1501,7 +1539,7 @@ function RechercheRueDVF({ styles }) {
       if (!t.lat || !t.lng) return;
       const icon = window.L.divIcon({
         className: '',
-        html: `<div style="background:#c9a84c;color:#fff;padding:3px 7px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${Math.round(t.prix/1000)}k</div>`,
+        html: `<div style="background:#c9a84c;color:#fff;padding:3px 7px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${Math.round(t.prix / 1000)}k</div>`,
         iconAnchor: [20, 10],
       });
       const marker = window.L.marker([t.lat, t.lng], { icon });
@@ -1520,7 +1558,6 @@ function RechercheRueDVF({ styles }) {
       markersLayer.current.addLayer(marker);
     });
 
-    // Recentrer sur les marqueurs si on en a
     if (results.transactions.filter(t => t.lat).length > 0) {
       const latlngs = results.transactions.filter(t => t.lat).map(t => [t.lat, t.lng]);
       leafletMap.current.fitBounds(latlngs, { padding: [30, 30], maxZoom: 16 });
@@ -1528,8 +1565,8 @@ function RechercheRueDVF({ styles }) {
   }, [results]);
 
   const lancerRecherche = async (nomRue, codeCommune) => {
-    const r = nomRue || rue;
-    const c = codeCommune || commune;
+    const r = nomRue  !== undefined ? nomRue  : rue;
+    const c = codeCommune !== undefined ? codeCommune : communeRef.current;
     if (!r.trim()) return;
     setLoading(true); setError(null); setResults(null);
     try {
@@ -1541,15 +1578,15 @@ function RechercheRueDVF({ styles }) {
     setLoading(false);
   };
 
-  const fmt   = (n) => n ? Math.round(n).toLocaleString('fr-FR') + '\u00a0€' : '—';
-  const fmtM2 = (n) => n ? Math.round(n).toLocaleString('fr-FR') + '\u00a0€/m²' : '—';
+  const fmtLocal   = (n) => n ? Math.round(n).toLocaleString('fr-FR') + '\u00a0€' : '—';
+  const fmtM2Local = (n) => n ? Math.round(n).toLocaleString('fr-FR') + '\u00a0€/m²' : '—';
 
   const mediane = (() => {
     if (!results?.transactions?.length) return null;
-    const prix = results.transactions.map(t => t.prixM2).filter(Boolean).sort((a,b)=>a-b);
+    const prix = results.transactions.map(t => t.prixM2).filter(Boolean).sort((a, b) => a - b);
     if (!prix.length) return null;
-    const mid = Math.floor(prix.length/2);
-    return prix.length%2===0 ? Math.round((prix[mid-1]+prix[mid])/2) : prix[mid];
+    const mid = Math.floor(prix.length / 2);
+    return prix.length % 2 === 0 ? Math.round((prix[mid - 1] + prix[mid]) / 2) : prix[mid];
   })();
 
   return (
@@ -1561,14 +1598,13 @@ function RechercheRueDVF({ styles }) {
           <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>
             🗺️ Recherche DVF par rue — cliquez sur la carte ou saisissez un nom
           </h3>
-          {/* Toggle vue */}
           <div style={{ display: 'flex', background: '#f0ead8', borderRadius: 8, padding: 3, gap: 2 }}>
-            {[['split','⬛⬛ Mixte'],['map','🗺️ Carte'],['table','📋 Tableau']].map(([v,l])=>(
-              <button key={v} onClick={()=>setViewMode(v)} style={{
-                padding:'5px 10px', border:'none', borderRadius:6, cursor:'pointer', fontSize:11,
-                fontWeight: viewMode===v ? 700 : 400,
-                background: viewMode===v ? '#fff' : 'transparent',
-                color: viewMode===v ? '#c9a84c' : '#8a9ab0',
+            {[['split', '⬛⬛ Mixte'], ['map', '🗺️ Carte'], ['table', '📋 Tableau']].map(([v, l]) => (
+              <button key={v} onClick={() => setViewMode(v)} style={{
+                padding: '5px 10px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11,
+                fontWeight: viewMode === v ? 700 : 400,
+                background: viewMode === v ? '#fff' : 'transparent',
+                color: viewMode === v ? '#c9a84c' : '#8a9ab0',
               }}>{l}</button>
             ))}
           </div>
@@ -1615,24 +1651,18 @@ function RechercheRueDVF({ styles }) {
       {/* Layout carte + tableau */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: viewMode === 'map' ? '1fr' : viewMode === 'table' ? '0px 1fr' : '1fr 1fr',
-        gap: viewMode === 'table' ? 0 : 16,
-        transition: 'grid-template-columns 0.3s',
+        gridTemplateColumns: viewMode === 'map' ? '1fr' : viewMode === 'table' ? '1fr' : '1fr 1fr',
+        gap: 16,
       }}>
-
         {/* Carte */}
         {viewMode !== 'table' && (
-          <div style={{
-            background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 16, overflow: 'hidden',
-            height: 520, position: 'relative',
-          }}>
+          <div style={{ background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 16, overflow: 'hidden', height: 520, position: 'relative' }}>
             {!mapReady && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0ead8', zIndex: 10 }}>
                 <span style={{ color: '#8a9ab0', fontSize: 13 }}>Chargement de la carte…</span>
               </div>
             )}
             <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
-            {/* Overlay instruction */}
             {!results && mapReady && (
               <div style={{
                 position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
@@ -1654,17 +1684,14 @@ function RechercheRueDVF({ styles }) {
           </div>
         )}
 
-        {/* Tableau des résultats */}
+        {/* Tableau */}
         {viewMode !== 'map' && (
           <div style={{ background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            {/* Header résultats */}
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #e8dcc8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               {results ? (
                 <>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>
-                      {results.rue} — {results.commune}
-                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>{results.rue} — {results.commune}</div>
                     <div style={{ fontSize: 11, color: '#8a9ab0', marginTop: 2 }}>
                       {results.nb} vente{results.nb > 1 ? 's' : ''} de maison{results.nb > 1 ? 's' : ''}
                     </div>
@@ -1672,7 +1699,7 @@ function RechercheRueDVF({ styles }) {
                   {mediane && (
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: 10, color: '#8a9ab0', textTransform: 'uppercase', fontWeight: 600 }}>Prix médian</div>
-                      <div style={{ fontSize: 20, fontWeight: 700, color: '#c9a84c' }}>{fmtM2(mediane)}</div>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: '#c9a84c' }}>{fmtM2Local(mediane)}</div>
                     </div>
                   )}
                 </>
@@ -1683,11 +1710,10 @@ function RechercheRueDVF({ styles }) {
               )}
             </div>
 
-            {/* Liste des transactions */}
             <div style={{ flex: 1, overflowY: 'auto', maxHeight: 456 }}>
               {results?.nb === 0 && (
                 <div style={{ textAlign: 'center', padding: '32px 16px', color: '#8a9ab0', fontSize: 13 }}>
-                  Aucune vente de maison trouvée.<br/>
+                  Aucune vente de maison trouvée.<br />
                   <span style={{ fontSize: 11 }}>Essayez avec un nom partiel</span>
                 </div>
               )}
@@ -1704,24 +1730,23 @@ function RechercheRueDVF({ styles }) {
                     padding: '12px 20px', borderBottom: '1px solid #f0ead8',
                     cursor: t.lat ? 'pointer' : 'default',
                     background: i % 2 === 0 ? 'transparent' : '#faf7f2',
-                    transition: 'background 0.15s',
                   }}
                   onMouseEnter={e => e.currentTarget.style.background = '#fef9f0'}
-                  onMouseLeave={e => e.currentTarget.style.background = i%2===0 ? 'transparent' : '#faf7f2'}
+                  onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : '#faf7f2'}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#1a3a5c' }}>{t.adresse}</div>
                       <div style={{ fontSize: 11, color: '#8a9ab0', marginTop: 2 }}>
-                        {new Date(t.date).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' })}
+                        {new Date(t.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
                         {t.pieces ? ` · ${t.pieces} pièces` : ''}
                         {t.terrain ? ` · terrain ${t.terrain} m²` : ''}
                       </div>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: '#1a3a5c' }}>{fmt(t.prix)}</div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: '#1a3a5c' }}>{fmtLocal(t.prix)}</div>
                       <div style={{ fontSize: 11, color: '#c9a84c', fontWeight: 600 }}>
-                        {t.surface ? t.surface + ' m² · ' : ''}{fmtM2(t.prixM2)}
+                        {t.surface ? t.surface + ' m² · ' : ''}{fmtM2Local(t.prixM2)}
                       </div>
                     </div>
                   </div>
