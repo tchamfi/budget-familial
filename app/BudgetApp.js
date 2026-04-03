@@ -706,10 +706,11 @@ function SimulateurImmobilier() {
       {/* ── Onglets internes ── */}
       <div style={styles.tabs}>
         {[
-          { id: 'simulation', label: '📊 Simulation' },
-          { id: 'annonces',   label: '🏡 Annonces' },
-          { id: 'scenarios',  label: '⚖️ Scénarios' },
-          { id: 'villes',     label: '📍 Villes' },
+          { id: 'simulation',   label: '📊 Simulation' },
+          { id: 'annonces',     label: '🏡 Annonces' },
+          { id: 'scenarios',    label: '⚖️ Scénarios' },
+          { id: 'villes',       label: '📍 Villes' },
+          { id: 'transactions', label: '🔍 Transactions DVF' },
         ].map(t => (
           <button
             key={t.id}
@@ -1058,6 +1059,10 @@ function SimulateurImmobilier() {
       {/* ════════════════════════════════════════════════════════════════════
           TAB : VILLES
       ════════════════════════════════════════════════════════════════════ */}
+      {activeTab === 'transactions' && (
+        <RechercheRueDVF styles={styles} />
+      )}
+
       {activeTab === 'villes' && (
         <VillesDVF
           villes={VILLES}
@@ -1378,6 +1383,201 @@ function VillesDVF({ villes, filterSecurite, setFilterSecurite, filterBudget, se
           );
         })}
       </div>
+    </div>
+  );
+}
+
+
+// ─── RECHERCHE DVF PAR RUE ───────────────────────────────────────────────────
+
+function RechercheRueDVF({ styles }) {
+  const [commune, setCommune] = useState('94033');
+  const [rue, setRue] = useState('');
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const COMMUNES = [
+    { code: '94033', nom: 'Fontenay-sous-Bois' },
+    { code: '94068', nom: 'Saint-Maur-des-Fossés' },
+    { code: '94080', nom: 'Vincennes' },
+    { code: '94052', nom: 'Nogent-sur-Marne' },
+    { code: '94058', nom: 'Le Perreux-sur-Marne' },
+    { code: '94067', nom: 'Saint-Mandé' },
+    { code: '94018', nom: 'Charenton-le-Pont' },
+    { code: '94015', nom: 'Bry-sur-Marne' },
+    { code: '94046', nom: 'Maisons-Alfort' },
+    { code: '94042', nom: 'Joinville-le-Pont' },
+    { code: '94055', nom: 'Ormesson-sur-Marne' },
+    { code: '94002', nom: 'Alfortville' },
+    { code: '94060', nom: 'Le Plessis-Trévise' },
+    { code: '94071', nom: 'Sucy-en-Brie' },
+    { code: '94079', nom: 'Villiers-sur-Marne' },
+    { code: '94019', nom: 'Chennevières-sur-Marne' },
+    { code: '94038', nom: 'La Queue-en-Brie' },
+    { code: '94017', nom: 'Champigny-sur-Marne' },
+    { code: '94028', nom: 'Créteil' },
+  ];
+
+  const rechercher = async () => {
+    if (!rue.trim()) return;
+    setLoading(true); setError(null); setResults(null);
+    try {
+      const res = await fetch(`/api/dvf?mode=rue&commune=${commune}&rue=${encodeURIComponent(rue.trim())}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setResults(data);
+    } catch (e) {
+      setError(e.message);
+    }
+    setLoading(false);
+  };
+
+  const fmt = (n) => n ? Math.round(n).toLocaleString('fr-FR') + '\u00a0€' : '—';
+  const fmtM2 = (n) => n ? Math.round(n).toLocaleString('fr-FR') + '\u00a0€/m²' : '—';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Formulaire de recherche */}
+      <div style={{
+        background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 16, padding: 20,
+      }}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c', marginBottom: 14 }}>
+          🔍 Recherche par rue — données DVF réelles 2020-2025
+        </h3>
+        <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr auto', gap: 10, alignItems: 'end' }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#5a7a9a', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>
+              Commune
+            </label>
+            <select
+              value={commune}
+              onChange={e => setCommune(e.target.value)}
+              style={{ ...styles.select, width: '100%' }}
+            >
+              {COMMUNES.map(c => (
+                <option key={c.code} value={c.code}>{c.nom}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#5a7a9a', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>
+              Nom de rue (partiel)
+            </label>
+            <input
+              type="text"
+              value={rue}
+              onChange={e => setRue(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && rechercher()}
+              placeholder="ex: BEAUMONTS, CHARLES BASSEE, GAMBETTA…"
+              style={{ ...styles.input, width: '100%', paddingRight: 12 }}
+            />
+          </div>
+          <button
+            onClick={rechercher}
+            disabled={loading || !rue.trim()}
+            style={{
+              padding: '10px 20px',
+              background: loading ? '#8a9ab0' : '#c9a84c',
+              color: '#fff', border: 'none', borderRadius: 8,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap',
+            }}
+          >
+            {loading ? 'Recherche…' : 'Rechercher'}
+          </button>
+        </div>
+        <p style={{ fontSize: 11, color: '#8a9ab0', marginTop: 8 }}>
+          Source : data.gouv.fr — Demandes de Valeurs Foncières (DGFiP) · Maisons uniquement · 2020 → juin 2025
+        </p>
+      </div>
+
+      {/* Erreur */}
+      {error && (
+        <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#991b1b' }}>
+          ⚠ {error}
+        </div>
+      )}
+
+      {/* Résultats */}
+      {results && (
+        <div style={{ background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 16, padding: 20 }}>
+          {/* Header résultats */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1a3a5c' }}>
+                Rue {results.rue} — {results.commune}
+              </h3>
+              <p style={{ fontSize: 12, color: '#8a9ab0', marginTop: 2 }}>
+                {results.nb} vente{results.nb > 1 ? 's' : ''} de maison{results.nb > 1 ? 's' : ''} trouvée{results.nb > 1 ? 's' : ''}
+              </p>
+            </div>
+            {results.nb > 0 && (() => {
+              const prix = results.transactions.map(t => t.prixM2).filter(Boolean).sort((a,b)=>a-b);
+              const mid = Math.floor(prix.length/2);
+              const med = prix.length > 0 ? (prix.length%2===0 ? Math.round((prix[mid-1]+prix[mid])/2) : prix[mid]) : null;
+              return med ? (
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, color: '#8a9ab0', textTransform: 'uppercase', fontWeight: 600 }}>Prix médian</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: '#c9a84c' }}>{fmtM2(med)}</div>
+                </div>
+              ) : null;
+            })()}
+          </div>
+
+          {results.nb === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px 0', color: '#8a9ab0', fontSize: 14 }}>
+              Aucune vente de maison trouvée sur cette rue.<br/>
+              <span style={{ fontSize: 12 }}>Essayez avec un nom partiel (ex: &quot;BEAUMONT&quot; au lieu de &quot;Rue des Beaumonts&quot;)</span>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    {['Date', 'Adresse', 'Prix', 'Surface', 'Pièces', 'Terrain', '€/m²'].map(h => (
+                      <th key={h} style={{
+                        textAlign: h === 'Date' || h === 'Adresse' ? 'left' : 'right',
+                        padding: '8px 12px', borderBottom: '2px solid #e8dcc8',
+                        fontSize: 10, fontWeight: 700, color: '#8a9ab0',
+                        textTransform: 'uppercase', letterSpacing: '0.05em',
+                        whiteSpace: 'nowrap',
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {results.transactions.map((t, i) => (
+                    <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : '#faf7f2' }}>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0ead8', whiteSpace: 'nowrap', color: '#5a7a9a' }}>
+                        {new Date(t.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </td>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0ead8', fontWeight: 500, color: '#1a3a5c' }}>
+                        {t.adresse}
+                      </td>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0ead8', textAlign: 'right', fontWeight: 700, color: '#1a3a5c', whiteSpace: 'nowrap' }}>
+                        {fmt(t.prix)}
+                      </td>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0ead8', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        {t.surface ? t.surface + ' m²' : '—'}
+                      </td>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0ead8', textAlign: 'right' }}>
+                        {t.pieces || '—'}
+                      </td>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0ead8', textAlign: 'right', color: '#8a9ab0', whiteSpace: 'nowrap' }}>
+                        {t.terrain ? t.terrain + ' m²' : '—'}
+                      </td>
+                      <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0ead8', textAlign: 'right', fontWeight: 600, color: '#c9a84c', whiteSpace: 'nowrap' }}>
+                        {fmtM2(t.prixM2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
