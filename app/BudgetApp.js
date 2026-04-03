@@ -1736,37 +1736,6 @@ function RechercheRueDVF({ styles }) {
   );
 }
 
-                        {new Date(t.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      </td>
-                      <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0ead8', fontWeight: 500, color: '#1a3a5c' }}>
-                        {t.adresse}
-                      </td>
-                      <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0ead8', textAlign: 'right', fontWeight: 700, color: '#1a3a5c', whiteSpace: 'nowrap' }}>
-                        {fmt(t.prix)}
-                      </td>
-                      <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0ead8', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                        {t.surface ? t.surface + ' m²' : '—'}
-                      </td>
-                      <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0ead8', textAlign: 'right' }}>
-                        {t.pieces || '—'}
-                      </td>
-                      <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0ead8', textAlign: 'right', color: '#8a9ab0', whiteSpace: 'nowrap' }}>
-                        {t.terrain ? t.terrain + ' m²' : '—'}
-                      </td>
-                      <td style={{ padding: '10px 12px', borderBottom: '1px solid #f0ead8', textAlign: 'right', fontWeight: 600, color: '#c9a84c', whiteSpace: 'nowrap' }}>
-                        {fmtM2(t.prixM2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── STYLES ─────────────────────────────────────────────────────────────────
 
