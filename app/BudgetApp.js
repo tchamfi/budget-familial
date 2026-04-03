@@ -1263,7 +1263,8 @@ function VillesDVF({ villes, filterSecurite, setFilterSecurite, filterBudget, se
                 loading: false,
                 prixM2: data.prix_m2_median,
                 nb: data.nb_transactions,
-                date: data.derniere_mutation,
+                annee: data.annee,
+                source: data.source,
                 error: !data.prix_m2_median,
               }
             }));
@@ -1367,7 +1368,7 @@ function VillesDVF({ villes, filterSecurite, setFilterSecurite, filterBudget, se
               </p>
               {dvf?.nb > 0 && !isLoading && (
                 <p style={{ fontSize: 10, color: '#8a9ab0', marginTop: 2 }}>
-                  {dvf.nb} ventes · jusqu&apos;à {dvf.date ? new Date(dvf.date).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' }) : '—'}
+                  {dvf.nb} ventes · données {dvf.annee || 2023}
                 </p>
               )}
               {dvf?.error && !isLoading && (
