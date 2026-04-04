@@ -872,6 +872,7 @@ function RechercheRueDVF({ styles }) {
   const [mapReady, setMapReady] = useState(false);
   const [viewMode, setViewMode] = useState('split');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeYear, setActiveYear] = useState('all'); // filtre année sur résultats
 
   const leafletMap   = useRef(null);
   const markersLayer = useRef(null);
@@ -881,13 +882,14 @@ function RechercheRueDVF({ styles }) {
 
   useEffect(() => { communeRef.current = communeSelectee; }, [communeSelectee]);
 
-  // ── FIX : invalidateSize quand la carte redevient visible ──
+  // ── FIX 1 : invalidateSize quand la carte redevient visible ──
   useEffect(() => {
     if (viewMode !== 'table' && leafletMap.current) {
-      setTimeout(() => leafletMap.current.invalidateSize(), 50);
+      setTimeout(() => leafletMap.current.invalidateSize(), 100);
     }
   }, [viewMode]);
 
+  // Autocomplétion commune
   const rechercherCommunes = (val) => {
     setCommuneInput(val);
     setCommuneSelectee(null);
@@ -912,24 +914,18 @@ function RechercheRueDVF({ styles }) {
     setShowSuggestions(false);
     if (leafletMap.current) {
       fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(commune.nom)}&countrycodes=fr&limit=1&format=json`, { headers: { 'User-Agent': 'BudgetFamilialTchamfong/1.0' } })
-        .then(r => r.json())
-        .then(data => { if (data[0]) leafletMap.current.setView([parseFloat(data[0].lat), parseFloat(data[0].lon)], 14); })
-        .catch(() => {});
+        .then(r => r.json()).then(data => { if (data[0]) leafletMap.current.setView([parseFloat(data[0].lat), parseFloat(data[0].lon)], 14); }).catch(() => {});
     }
   };
 
+  // Charger Leaflet
   useEffect(() => {
     if (window.L) { setMapReady(true); return; }
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    document.head.appendChild(link);
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    script.onload = () => setMapReady(true);
-    document.head.appendChild(script);
+    const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(link);
+    const script = document.createElement('script'); script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; script.onload = () => setMapReady(true); document.head.appendChild(script);
   }, []);
 
+  // ── FIX 2 : Initialiser la carte (div toujours dans le DOM) ──
   useEffect(() => {
     if (!mapReady || !mapContainer.current || leafletMap.current) return;
     const map = window.L.map(mapContainer.current, { zoomControl: true }).setView([DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng], DEFAULT_MAP_CENTER.zoom);
@@ -970,27 +966,27 @@ function RechercheRueDVF({ styles }) {
     setTimeout(() => map.invalidateSize(), 100);
   }, [mapReady]);
 
+  // Marqueurs
   useEffect(() => {
     if (!leafletMap.current || !markersLayer.current || !results) return;
     markersLayer.current.clearLayers();
-    results.transactions.forEach(t => {
+    const filtered = activeYear === 'all' ? results.transactions : results.transactions.filter(t => t.date?.startsWith(activeYear));
+    filtered.forEach(t => {
       if (!t.lat || !t.lng) return;
       const icon = window.L.divIcon({ className: '', html: `<div style="background:#c9a84c;color:#fff;padding:3px 7px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${Math.round(t.prix / 1000)}k</div>`, iconAnchor: [20, 10] });
       const marker = window.L.marker([t.lat, t.lng], { icon });
-      marker.bindPopup(`<div style="font-family:DM Sans,sans-serif;min-width:180px"><div style="font-weight:700;font-size:14px;color:#1a3a5c;margin-bottom:4px">${t.adresse}</div><div style="font-size:16px;font-weight:800;color:#c9a84c">${t.prix.toLocaleString('fr-FR')} €</div><div style="font-size:12px;color:#5a7a9a;margin-top:2px">${t.surface ? t.surface + ' m²' : ''}${t.prixM2 ? ' · ' + t.prixM2.toLocaleString('fr-FR') + ' €/m²' : ''}</div><div style="font-size:11px;color:#8a9ab0;margin-top:4px">${t.pieces ? t.pieces + ' pièces · ' : ''}${new Date(t.date).toLocaleDateString('fr-FR')}</div></div>`);
+      marker.bindPopup(`<div style="font-family:DM Sans,sans-serif;min-width:180px"><div style="font-weight:700;font-size:14px;color:#1a3a5c;margin-bottom:4px">${t.adresse}</div><div style="font-size:16px;font-weight:800;color:#c9a84c">${t.prix.toLocaleString('fr-FR')} \u20ac</div><div style="font-size:12px;color:#5a7a9a;margin-top:2px">${t.surface ? t.surface + ' m\u00b2' : ''}${t.prixM2 ? ' \u00b7 ' + t.prixM2.toLocaleString('fr-FR') + ' \u20ac/m\u00b2' : ''}</div><div style="font-size:11px;color:#8a9ab0;margin-top:4px">${t.pieces ? t.pieces + ' pi\u00e8ces \u00b7 ' : ''}${new Date(t.date).toLocaleDateString('fr-FR')}</div></div>`);
       markersLayer.current.addLayer(marker);
     });
-    if (results.transactions.filter(t => t.lat).length > 0) {
-      const latlngs = results.transactions.filter(t => t.lat).map(t => [t.lat, t.lng]);
-      leafletMap.current.fitBounds(latlngs, { padding: [30, 30], maxZoom: 16 });
-    }
-  }, [results]);
+    const latlngs = filtered.filter(t => t.lat).map(t => [t.lat, t.lng]);
+    if (latlngs.length > 0) leafletMap.current.fitBounds(latlngs, { padding: [30, 30], maxZoom: 16 });
+  }, [results, activeYear]);
 
   const lancerRecherche = async (nomRue, commune) => {
     const r = nomRue !== undefined ? nomRue : rue;
     const c = commune !== undefined ? commune : communeRef.current;
     if (!r.trim() || !c) return;
-    setLoading(true); setError(null); setResults(null);
+    setLoading(true); setError(null); setResults(null); setActiveYear('all');
     try {
       const res = await fetch(`/api/dvf?mode=rue&commune=${c.code}&rue=${encodeURIComponent(r.trim())}`);
       const data = await res.json();
@@ -1000,22 +996,53 @@ function RechercheRueDVF({ styles }) {
     setLoading(false);
   };
 
-  const fmtLocal   = (n) => n ? Math.round(n).toLocaleString('fr-FR') + '\u00a0€' : '—';
-  const fmtM2Local = (n) => n ? Math.round(n).toLocaleString('fr-FR') + '\u00a0€/m²' : '—';
+  const fmtLocal   = (n) => n ? Math.round(n).toLocaleString('fr-FR') + '\u00a0\u20ac' : '\u2014';
+  const fmtM2Local = (n) => n ? Math.round(n).toLocaleString('fr-FR') + '\u00a0\u20ac/m\u00b2' : '\u2014';
+
+  // Données filtrées par année
+  const transactionsFiltrees = results
+    ? (activeYear === 'all' ? results.transactions : results.transactions.filter(t => t.date?.startsWith(activeYear)))
+    : [];
 
   const mediane = (() => {
-    if (!results?.transactions?.length) return null;
-    const prix = results.transactions.map(t => t.prixM2).filter(Boolean).sort((a, b) => a - b);
+    if (!transactionsFiltrees.length) return null;
+    const prix = transactionsFiltrees.map(t => t.prixM2).filter(Boolean).sort((a, b) => a - b);
     if (!prix.length) return null;
     const mid = Math.floor(prix.length / 2);
     return prix.length % 2 === 0 ? Math.round((prix[mid - 1] + prix[mid]) / 2) : prix[mid];
   })();
 
+  // ── GRAPHIQUE : prix médian par année (données déjà chargées) ──
+  const chartDataAnnees = useMemo(() => {
+    if (!results?.transactions?.length) return [];
+    const byYear = {};
+    results.transactions.forEach(t => {
+      const y = t.date?.substring(0, 4);
+      if (!y || !t.prixM2 || t.prixM2 < 1000) return;
+      if (!byYear[y]) byYear[y] = [];
+      byYear[y].push(t.prixM2);
+    });
+    return Object.entries(byYear).sort(([a], [b]) => a.localeCompare(b)).map(([annee, prix]) => {
+      const sorted = [...prix].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      const mediane = sorted.length % 2 === 0 ? Math.round((sorted[mid-1]+sorted[mid])/2) : sorted[mid];
+      return { annee, mediane, nb: prix.length };
+    });
+  }, [results]);
+
+  // Années disponibles
+  const anneesDisponibles = useMemo(() => {
+    if (!results?.transactions?.length) return [];
+    return [...new Set(results.transactions.map(t => t.date?.substring(0, 4)).filter(Boolean))].sort();
+  }, [results]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* Barre de contrôle */}
       <div style={{ background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 16, padding: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>🗺️ Recherche DVF par rue — France entière · cliquez sur la carte ou saisissez</h3>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>🗺️ Recherche DVF — France entière · cliquez sur la carte ou saisissez</h3>
           <div style={{ display: 'flex', background: '#f0ead8', borderRadius: 8, padding: 3, gap: 2 }}>
             {[['split', '⬛⬛ Mixte'], ['map', '🗺️ Carte'], ['table', '📋 Tableau']].map(([v, l]) => (
               <button key={v} onClick={() => setViewMode(v)} style={{ padding: '5px 10px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: viewMode === v ? 700 : 400, background: viewMode === v ? '#fff' : 'transparent', color: viewMode === v ? '#c9a84c' : '#8a9ab0' }}>{l}</button>
@@ -1023,12 +1050,13 @@ function RechercheRueDVF({ styles }) {
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+          {/* Commune */}
           <div style={{ position: 'relative' }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: '#5a7a9a', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>
               Commune {loadingSuggestions && <span style={{ color: '#c9a84c' }}>⏳</span>}
               {communeSelectee && <span style={{ color: '#16a34a', marginLeft: 4 }}>✓</span>}
             </label>
-            <input type="text" value={communeInput} onChange={e => rechercherCommunes(e.target.value)} onBlur={() => setTimeout(() => setShowSuggestions(false), 150)} onFocus={() => communeSuggestions.length > 0 && setShowSuggestions(true)} placeholder="Fontenay-sous-Bois, Lyon, Bordeaux…" style={{ ...styles.input, width: '100%', paddingRight: 12, borderColor: communeSelectee ? '#16a34a' : undefined }}/>
+            <input type="text" value={communeInput} onChange={e => rechercherCommunes(e.target.value)} onBlur={() => setTimeout(() => setShowSuggestions(false), 150)} onFocus={() => communeSuggestions.length > 0 && setShowSuggestions(true)} placeholder="Fontenay-sous-Bois, Lyon…" style={{ ...styles.input, width: '100%', paddingRight: 12, borderColor: communeSelectee ? '#16a34a' : undefined }}/>
             {showSuggestions && communeSuggestions.length > 0 && (
               <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000, background: '#fff', border: '1px solid #e8dcc8', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', marginTop: 4, overflow: 'hidden' }}>
                 {communeSuggestions.map((c, i) => (
@@ -1040,64 +1068,137 @@ function RechercheRueDVF({ styles }) {
               </div>
             )}
           </div>
+          {/* Rue */}
           <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: '#5a7a9a', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>Nom de rue <span style={{ color: '#c4b898', fontWeight: 400 }}>(ou cliquez sur la carte)</span></label>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#5a7a9a', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>Nom de rue <span style={{ color: '#c4b898', fontWeight: 400 }}>(ou clic carte)</span></label>
             <input type="text" value={rue} onChange={e => setRue(e.target.value)} onKeyDown={e => e.key === 'Enter' && lancerRecherche()} placeholder="ex: BEAUMONTS, GAMBETTA…" style={{ ...styles.input, width: '100%', paddingRight: 12 }}/>
           </div>
-          <button onClick={() => lancerRecherche()} disabled={loading || !rue.trim() || !communeSelectee} title={!communeSelectee ? 'Sélectionnez une commune' : ''} style={{ padding: '10px 20px', background: loading ? '#8a9ab0' : !communeSelectee ? '#d4c5a0' : '#c9a84c', color: '#fff', border: 'none', borderRadius: 8, cursor: loading || !communeSelectee ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 13 }}>
-            {loading ? '⏳' : '🔍 Chercher'}
+          <button onClick={() => lancerRecherche()} disabled={loading || !rue.trim() || !communeSelectee} style={{ padding: '10px 20px', background: loading ? '#8a9ab0' : !communeSelectee ? '#d4c5a0' : '#c9a84c', color: '#fff', border: 'none', borderRadius: 8, cursor: loading || !communeSelectee ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 13 }}>
+            {loading ? '⏳' : '🔍'}
           </button>
         </div>
-        <p style={{ fontSize: 11, color: '#8a9ab0', marginTop: 8 }}>Source : data.gouv.fr — DVF DGFiP · Maisons uniquement · 2020 → juin 2025 · 200 ventes les plus récentes</p>
+        <p style={{ fontSize: 11, color: '#8a9ab0', marginTop: 8 }}>DVF DGFiP · Maisons · 2020 → 2025 · 200 ventes les plus récentes</p>
       </div>
 
       {error && <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#991b1b' }}>⚠ {error}</div>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: viewMode === 'map' ? '1fr' : viewMode === 'table' ? '1fr' : '1fr 1fr', gap: 16 }}>
-        {viewMode !== 'table' && (
-          <div style={{ background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 16, overflow: 'hidden', height: 520, position: 'relative' }}>
-            {!mapReady && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0ead8', zIndex: 10 }}><span style={{ color: '#8a9ab0', fontSize: 13 }}>Chargement de la carte…</span></div>}
-            <div ref={mapContainer} style={{ width: '100%', height: '100%' }}/>
-            {!results && mapReady && <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: 'rgba(26,58,92,0.85)', color: '#fff', padding: '8px 16px', borderRadius: 20, fontSize: 12, fontWeight: 500, zIndex: 500, whiteSpace: 'nowrap' }}>👆 Cliquez sur une rue pour voir les ventes de maisons</div>}
-            {loading && <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', background: '#c9a84c', color: '#fff', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, zIndex: 500 }}>Recherche en cours…</div>}
+      {/* ── GRAPHIQUE ÉVOLUTION PRIX/M² PAR ANNÉE ── */}
+      {chartDataAnnees.length >= 2 && (
+        <div style={{ background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 16, padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>📈 Évolution du prix médian/m²</h3>
+              <p style={{ fontSize: 11, color: '#8a9ab0', marginTop: 2 }}>{results?.rue} — {results?.commune} · maisons</p>
+            </div>
+            {/* Filtre années */}
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              <button onClick={() => setActiveYear('all')} style={{ padding: '4px 10px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: activeYear === 'all' ? 700 : 400, background: activeYear === 'all' ? '#c9a84c' : '#f0ead8', color: activeYear === 'all' ? '#fff' : '#8a9ab0' }}>Toutes</button>
+              {anneesDisponibles.map(y => (
+                <button key={y} onClick={() => setActiveYear(y)} style={{ padding: '4px 10px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: activeYear === y ? 700 : 400, background: activeYear === y ? '#1a3a5c' : '#f0ead8', color: activeYear === y ? '#fff' : '#8a9ab0' }}>{y}</button>
+              ))}
+            </div>
           </div>
-        )}
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={chartDataAnnees} barSize={32}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0ead8" vertical={false}/>
+              <XAxis dataKey="annee" tick={{ fontSize: 12, fill: '#8a9ab0' }} axisLine={false} tickLine={false}/>
+              <YAxis tick={{ fontSize: 11, fill: '#8a9ab0' }} axisLine={false} tickLine={false} tickFormatter={v => v.toLocaleString('fr-FR')}/>
+              <Tooltip formatter={(v, name) => [v.toLocaleString('fr-FR') + ' €/m²', 'Prix médian']} contentStyle={{ borderRadius: 10, border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', fontSize: 13 }} labelStyle={{ fontWeight: 700, color: '#1a3a5c' }}/>
+              <Bar dataKey="mediane" radius={[6, 6, 0, 0]} fill="#c9a84c" name="Prix médian/m²">
+                {chartDataAnnees.map((entry, i) => (
+                  <Cell key={i} fill={entry.annee === activeYear ? '#1a3a5c' : '#c9a84c'} opacity={activeYear === 'all' || entry.annee === activeYear ? 1 : 0.35}/>
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          {/* Tendance */}
+          {chartDataAnnees.length >= 2 && (() => {
+            const first = chartDataAnnees[0].mediane;
+            const last = chartDataAnnees[chartDataAnnees.length - 1].mediane;
+            const pct = Math.round(((last - first) / first) * 100);
+            const color = pct >= 0 ? '#16a34a' : '#dc2626';
+            return (
+              <div style={{ display: 'flex', gap: 20, marginTop: 12, padding: '10px 14px', background: '#f9f5ee', borderRadius: 10 }}>
+                <div><span style={{ fontSize: 11, color: '#8a9ab0' }}>Première vente</span><div style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>{chartDataAnnees[0].mediane.toLocaleString('fr-FR')} €/m² ({chartDataAnnees[0].annee})</div></div>
+                <div><span style={{ fontSize: 11, color: '#8a9ab0' }}>Dernière vente</span><div style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>{last.toLocaleString('fr-FR')} €/m² ({chartDataAnnees[chartDataAnnees.length-1].annee})</div></div>
+                <div><span style={{ fontSize: 11, color: '#8a9ab0' }}>Évolution</span><div style={{ fontSize: 14, fontWeight: 700, color }}>{pct > 0 ? '+' : ''}{pct}%</div></div>
+                {mediane && <div><span style={{ fontSize: 11, color: '#8a9ab0' }}>Médiane actuelle</span><div style={{ fontSize: 14, fontWeight: 700, color: '#c9a84c' }}>{mediane.toLocaleString('fr-FR')} €/m²</div></div>}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Layout carte + tableau */}
+      <div style={{ display: 'grid', gridTemplateColumns: viewMode === 'map' ? '1fr' : viewMode === 'table' ? '1fr' : '1fr 1fr', gap: 16 }}>
+
+        {/* ── FIX LEAFLET : div toujours dans le DOM, juste cachée ── */}
+        <div style={{ display: viewMode === 'table' ? 'none' : 'block', background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 16, overflow: 'hidden', height: 480, position: 'relative' }}>
+          {!mapReady && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0ead8', zIndex: 10 }}><span style={{ color: '#8a9ab0', fontSize: 13 }}>Chargement de la carte…</span></div>}
+          <div ref={mapContainer} style={{ width: '100%', height: '100%' }}/>
+          {!results && mapReady && <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: 'rgba(26,58,92,0.85)', color: '#fff', padding: '8px 16px', borderRadius: 20, fontSize: 12, fontWeight: 500, zIndex: 500, whiteSpace: 'nowrap' }}>👆 Cliquez sur une rue pour voir les ventes</div>}
+          {loading && <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', background: '#c9a84c', color: '#fff', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, zIndex: 500 }}>Recherche…</div>}
+        </div>
+
+        {/* Tableau */}
         {viewMode !== 'map' && (
           <div style={{ background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e8dcc8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid #e8dcc8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               {results ? (
                 <>
-                  <div><div style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>{results.rue} — {results.commune}</div><div style={{ fontSize: 11, color: '#8a9ab0', marginTop: 2 }}>{results.nb} vente{results.nb > 1 ? 's' : ''} de maison{results.nb > 1 ? 's' : ''}{results.nb === 200 && <span style={{ color: '#c9a84c', marginLeft: 4 }}>· 200 plus récentes</span>}</div></div>
-                  {mediane && <div style={{ textAlign: 'right' }}><div style={{ fontSize: 10, color: '#8a9ab0', textTransform: 'uppercase', fontWeight: 600 }}>Prix médian</div><div style={{ fontSize: 20, fontWeight: 700, color: '#c9a84c' }}>{fmtM2Local(mediane)}</div></div>}
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>{results.rue} — {results.commune}</div>
+                    <div style={{ fontSize: 11, color: '#8a9ab0', marginTop: 2 }}>
+                      {transactionsFiltrees.length} vente{transactionsFiltrees.length > 1 ? 's' : ''}
+                      {activeYear !== 'all' ? ` en ${activeYear}` : ` (${results.nb} total)`}
+                    </div>
+                  </div>
+                  {mediane && <div style={{ textAlign: 'right' }}><div style={{ fontSize: 10, color: '#8a9ab0', textTransform: 'uppercase', fontWeight: 600 }}>Prix médian</div><div style={{ fontSize: 18, fontWeight: 700, color: '#c9a84c' }}>{fmtM2Local(mediane)}</div></div>}
                 </>
               ) : (
                 <div style={{ color: '#8a9ab0', fontSize: 13 }}>{loading ? 'Chargement…' : 'Sélectionnez une commune et cherchez une rue'}</div>
               )}
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', maxHeight: 456 }}>
-              {results?.nb === 0 && <div style={{ textAlign: 'center', padding: '32px 16px', color: '#8a9ab0', fontSize: 13 }}>Aucune vente de maison trouvée.<br/><span style={{ fontSize: 11 }}>Essayez avec un nom partiel</span></div>}
-              {results?.transactions?.map((t, i) => (
-                <div key={i} onClick={() => { if (t.lat && leafletMap.current) { leafletMap.current.setView([t.lat, t.lng], 17); setViewMode('split'); }}} style={{ padding: '12px 20px', borderBottom: '1px solid #f0ead8', cursor: t.lat ? 'pointer' : 'default', background: i % 2 === 0 ? 'transparent' : '#faf7f2' }} onMouseEnter={e => e.currentTarget.style.background = '#fef9f0'} onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : '#faf7f2'}>
+            <div style={{ flex: 1, overflowY: 'auto', maxHeight: 420 }}>
+              {results?.nb === 0 && <div style={{ textAlign: 'center', padding: '32px 16px', color: '#8a9ab0', fontSize: 13 }}>Aucune vente trouvée.<br/><span style={{ fontSize: 11 }}>Essayez avec un nom partiel</span></div>}
+              {transactionsFiltrees.map((t, i) => (
+                <div key={i} onClick={() => { if (t.lat && leafletMap.current) { leafletMap.current.setView([t.lat, t.lng], 17); setViewMode('split'); }}} style={{ padding: '11px 18px', borderBottom: '1px solid #f0ead8', cursor: t.lat ? 'pointer' : 'default', background: i % 2 === 0 ? 'transparent' : '#faf7f2' }} onMouseEnter={e => e.currentTarget.style.background = '#fef9f0'} onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : '#faf7f2'}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#1a3a5c' }}>{t.adresse}</div>
-                      <div style={{ fontSize: 11, color: '#8a9ab0', marginTop: 2 }}>{new Date(t.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}{t.pieces ? ` · ${t.pieces} pièces` : ''}{t.terrain ? ` · terrain ${t.terrain} m²` : ''}</div>
+                      <div style={{ fontSize: 11, color: '#8a9ab0', marginTop: 2 }}>
+                        {new Date(t.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        {t.pieces ? ` · ${t.pieces} pièces` : ''}{t.terrain ? ` · terrain ${t.terrain} m²` : ''}
+                      </div>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: '#1a3a5c' }}>{fmtLocal(t.prix)}</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>{fmtLocal(t.prix)}</div>
                       <div style={{ fontSize: 11, color: '#c9a84c', fontWeight: 600 }}>{t.surface ? t.surface + ' m² · ' : ''}{fmtM2Local(t.prixM2)}</div>
                     </div>
                   </div>
-                  {t.lat && <div style={{ fontSize: 10, color: '#c4b898', marginTop: 4 }}>📍 Cliquer pour localiser</div>}
+                  {t.lat && <div style={{ fontSize: 10, color: '#c4b898', marginTop: 3 }}>📍 Cliquer pour localiser</div>}
                 </div>
               ))}
             </div>
           </div>
         )}
       </div>
+
+      {/* Note Airtable pour données 2014-2019 */}
+      {results && (
+        <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 12, padding: '12px 16px', fontSize: 12, color: '#0369a1', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <span style={{ fontSize: 16 }}>💡</span>
+          <span>
+            <strong>Données 2014-2019 disponibles</strong> — Pour afficher l'historique complet,
+            importez les CSV DVF du Cerema dans Airtable (table <code>DVF_Transactions</code>)
+            et activez l'option dans les paramètres de l'onglet.
+          </span>
+        </div>
+      )}
     </div>
   );
 }
+
 
 // ─── STYLES ─────────────────────────────────────────────────────────────────
 
