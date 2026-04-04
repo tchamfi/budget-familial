@@ -16,7 +16,7 @@ const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR
 
 // === BARÈME IR 2026 (revenus 2025) ===
 const IR_TRANCHES = [{min:0,max:11600,taux:0},{min:11600,max:29579,taux:0.11},{min:29579,max:84577,taux:0.30},{min:84577,max:181917,taux:0.41},{min:181917,max:Infinity,taux:0.45}];
-const PLAFOND_QF = 1807; // par demi-part
+const PLAFOND_QF = 1807;
 const DECOTE_SOLO = 897;
 const DECOTE_COUPLE = 1483;
 const DECOTE_TAUX = 0.4525;
@@ -29,9 +29,8 @@ function calculerIR(revenuImposable, nbParts, isCouple=true) {
     impotParPart += (Math.min(qf, t.max) - t.min) * t.taux;
   }
   let impotBrut = impotParPart * nbParts;
-  // Plafonnement quotient familial
   const partsBase = isCouple ? 2 : 1;
-  const demiPartsSupp = (nbParts - partsBase) * 2; // nb demi-parts
+  const demiPartsSupp = (nbParts - partsBase) * 2;
   if (demiPartsSupp > 0) {
     const qfBase = revenuImposable / partsBase;
     let impotBase = 0;
@@ -41,7 +40,6 @@ function calculerIR(revenuImposable, nbParts, isCouple=true) {
     const plafond = demiPartsSupp * PLAFOND_QF;
     if (avantage > plafond) impotBrut = impotBase - plafond;
   }
-  // Décote
   const seuilDecote = isCouple ? 3277 : 1982;
   if (impotBrut > 0 && impotBrut < seuilDecote) {
     const forfait = isCouple ? DECOTE_COUPLE : DECOTE_SOLO;
@@ -58,9 +56,6 @@ async function deleteRecord(table,id){await fetch(`${API}/${encodeURIComponent(t
 async function batchDelete(table,ids){for(let i=0;i<ids.length;i+=10){const batch=ids.slice(i,i+10);const params=batch.map(id=>`records[]=${id}`).join("&");await fetch(`${API}/${encodeURIComponent(table)}?${params}`,{method:"DELETE",headers:HEADERS});}}
 function decodeJwt(t){try{return JSON.parse(atob(t.split(".")[1].replace(/-/g,"+").replace(/_/g,"/")));}catch{return null;}}
 
-// ============================================================
-// GLOBAL STYLES + LOGIN (kept from V5)
-// ============================================================
 function GlobalStyles(){return(<style dangerouslySetInnerHTML={{__html:`
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Serif+Display&display=swap');
   *{margin:0;padding:0;box-sizing:border-box;}body{font-family:'DM Sans',sans-serif;background:#faf9f7;color:#1a1a2e;-webkit-font-smoothing:antialiased;}
@@ -123,9 +118,6 @@ function LoginPage({onLogin}){
     </div>
   </div></>);}
 
-// ============================================================
-// MODALS (kept from V5)
-// ============================================================
 function Modal({children,onClose}){return(<div onClick={onClose} className="fade-in" style={{position:"fixed",inset:0,background:"rgba(26,26,46,0.35)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}}><div onClick={e=>e.stopPropagation()} className="scale-in" style={{background:"#fff",borderRadius:20,padding:"32px 28px",maxWidth:480,width:"90%",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 24px 80px rgba(26,26,46,0.15)",border:"1px solid rgba(26,26,46,0.06)"}}>{children}</div></div>);}
 
 function ConfirmModal({title,message,onConfirm,onCancel,confirmLabel="Confirmer",danger=true}){return(<Modal onClose={onCancel}><h3 style={{fontSize:18,fontWeight:700,marginBottom:8}}>{title}</h3><p style={{color:"#8a8578",fontSize:14,marginBottom:24,lineHeight:1.6}}>{message}</p><div style={{display:"flex",gap:10,justifyContent:"flex-end"}}><button className="btn-press" onClick={onCancel} style={{padding:"10px 20px",background:"transparent",color:"#8a8578",border:"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600}}>Annuler</button><button className="btn-press" onClick={onConfirm} style={{padding:"10px 20px",background:danger?"#b91c1c":"#1a1a2e",color:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600}}>{confirmLabel}</button></div></Modal>);}
@@ -155,17 +147,12 @@ function AddEpModal({onClose,onAdd}){const[type,setType]=useState("");const[bene
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}><button className="btn-press" onClick={onClose} style={{padding:"10px 20px",background:"transparent",color:"#8a8578",border:"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600}}>Annuler</button><button className="btn-press" disabled={!type} onClick={()=>onAdd({type,beneficiaire:benef,objectif:obj})} style={{padding:"10px 22px",background:"#1a1a2e",color:"#faf9f7",border:"none",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600,opacity:type?1:.5}}>Ajouter</button></div>
   </div></Modal>);}
 
-// ============================================================
-// AI ASSISTANT COMPONENT
-// ============================================================
 function AIAssistant({revenus,charges,chargesMontants,epargne,epargneMontants,objectifs,annee}){
   const[msgs,setMsgs]=useState([{role:"assistant",content:"Bonjour ! Je suis votre assistant budgétaire. Posez-moi des questions sur vos finances : analyse des dépenses, conseils d'économies, projections..."}]);
   const[input,setInput]=useState("");
   const[loading,setLoading]=useState(false);
   const endRef=useRef(null);
   useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[msgs]);
-
-  // Build context from data
   const buildContext=()=>{
     const revByYear=revenus.filter(r=>r.fields?.annee===annee);
     const cmByYear=chargesMontants.filter(r=>r.fields?.annee===annee);
@@ -181,7 +168,6 @@ function AIAssistant({revenus,charges,chargesMontants,epargne,epargneMontants,ob
     objectifs.forEach(o=>ctx+=`${o.fields?.type}: Objectif=${o.fields?.objectif_annuel||0}€\n`);
     return ctx;
   };
-
   const send=async()=>{
     if(!input.trim()||loading)return;
     const userMsg={role:"user",content:input};
@@ -198,11 +184,8 @@ function AIAssistant({revenus,charges,chargesMontants,epargne,epargneMontants,ob
     }catch(e){setMsgs(p=>[...p,{role:"assistant",content:"Erreur de connexion. Réessayez."}]);}
     setLoading(false);
   };
-
   const suggestions=["Où dépensons-nous le plus ?","Combien économiser si on réduit les abonnements ?","Quel est notre taux d'épargne ?","Sommes-nous sur la bonne trajectoire pour nos objectifs ?"];
-
   return(<div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 180px)",maxHeight:700}}>
-    {/* Messages */}
     <div style={{flex:1,overflowY:"auto",padding:"20px 0",display:"flex",flexDirection:"column",gap:16}}>
       {msgs.map((m,i)=><div key={i} className="fade-up" style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
         <div style={{maxWidth:"80%",padding:"14px 18px",borderRadius:m.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.role==="user"?"#1a1a2e":"#fff",color:m.role==="user"?"#faf9f7":"#1a1a2e",fontSize:14,lineHeight:1.6,boxShadow:"0 2px 8px rgba(0,0,0,0.04)",border:m.role==="user"?"none":"1px solid #e8e4dd",whiteSpace:"pre-wrap"}}>{m.content}</div>
@@ -210,9 +193,7 @@ function AIAssistant({revenus,charges,chargesMontants,epargne,epargneMontants,ob
       {loading&&<div style={{display:"flex",justifyContent:"flex-start"}}><div style={{padding:"14px 18px",borderRadius:"16px 16px 16px 4px",background:"#fff",border:"1px solid #e8e4dd",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}><span className="typing-dot"/><span className="typing-dot"/><span className="typing-dot"/></div></div>}
       <div ref={endRef}/>
     </div>
-    {/* Suggestions */}
     {msgs.length<=1&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>{suggestions.map((s,i)=><button key={i} className="btn-press" onClick={()=>{setInput(s);}} style={{padding:"8px 14px",background:"#fff",border:"1px solid #ddd8d0",borderRadius:20,cursor:"pointer",fontSize:12,color:"#1a1a2e",fontWeight:500}}>{s}</button>)}</div>}
-    {/* Input */}
     <div style={{display:"flex",gap:10,padding:"16px 0",borderTop:"1px solid #e8e4dd"}}>
       <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&send()} placeholder="Posez une question sur votre budget..." style={{flex:1,padding:"12px 16px",border:"1px solid #ddd8d0",borderRadius:12,fontSize:14,outline:"none",background:"#fff",fontFamily:"'DM Sans',sans-serif"}}/>
       <button className="btn-press" onClick={send} disabled={loading||!input.trim()} style={{padding:"12px 24px",background:"#1a1a2e",color:"#faf9f7",border:"none",borderRadius:12,cursor:"pointer",fontSize:13,fontWeight:600,opacity:loading||!input.trim()?.5:1}}>Envoyer</button>
@@ -220,16 +201,12 @@ function AIAssistant({revenus,charges,chargesMontants,epargne,epargneMontants,ob
   </div>);
 }
 
-// ============================================================
-// TAX SIMULATOR COMPONENT
-// ============================================================
 function TaxSimulator(){
   const[revL,setRevL]=useState(30000);
   const[revO,setRevO]=useState(50000);
   const[situation,setSituation]=useState("couple");
   const[enfants,setEnfants]=useState(2);
   const[result,setResult]=useState(null);
-
   const calculate=()=>{
     const revTotal=revL+revO;
     const isCouple=situation==="couple";
@@ -238,11 +215,9 @@ function TaxSimulator(){
     const nbParts=partsBase+partsEnfants;
     const impot=calculerIR(revTotal,nbParts,isCouple);
     const tauxMoyen=revTotal>0?((impot/revTotal)*100):0;
-    // TMI
     const qf=revTotal/nbParts;
     let tmi=0;
     for(const t of IR_TRANCHES){if(qf>t.min)tmi=t.taux*100;}
-    // Détail par tranche
     const detail=[];
     for(const t of IR_TRANCHES){
       if(qf<=t.min)break;
@@ -251,14 +226,10 @@ function TaxSimulator(){
     }
     setResult({impot,tauxMoyen:tauxMoyen.toFixed(1),tmi:tmi.toFixed(0),nbParts,revTotal,detail,mensuel:Math.round(impot/12)});
   };
-
   useEffect(()=>{calculate();},[revL,revO,situation,enfants]);
-
   const ls={fontSize:11,fontWeight:600,color:"#8a8578",marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.05em"};
   const is={padding:"10px 14px",border:"1px solid #ddd8d0",borderRadius:10,fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",background:"#faf9f7",fontFamily:"'DM Sans',sans-serif",textAlign:"right"};
-
   return(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24}}>
-    {/* Formulaire */}
     <div style={{background:"#fff",borderRadius:16,padding:24,border:"1px solid rgba(26,26,46,0.06)"}}>
       <h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:18,marginBottom:20}}>Paramètres</h3>
       <div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -266,12 +237,9 @@ function TaxSimulator(){
         <div><label style={ls}>Revenu net imposable — Ophélie</label><input style={is} type="number" value={revO} onChange={e=>setRevO(+e.target.value)}/></div>
         <div><label style={ls}>Situation</label><div style={{display:"flex",gap:8}}>{[["couple","Marié / Pacsé"],["solo","Célibataire"]].map(([v,l])=><button key={v} className="btn-press" onClick={()=>setSituation(v)} style={{flex:1,padding:"10px",border:situation===v?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:situation===v?700:400,background:situation===v?"rgba(26,26,46,0.04)":"#fff",color:situation===v?"#1a1a2e":"#8a8578"}}>{l}</button>)}</div></div>
         <div><label style={ls}>Nombre d'enfants à charge</label><div style={{display:"flex",gap:6}}>{[0,1,2,3,4,5].map(n=><button key={n} className="btn-press" onClick={()=>setEnfants(n)} style={{width:42,height:42,border:enfants===n?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:15,fontWeight:enfants===n?700:400,background:enfants===n?"rgba(26,26,46,0.04)":"#fff",color:enfants===n?"#1a1a2e":"#8a8578"}}>{n}</button>)}</div></div>
-        <div style={{padding:"12px 16px",background:"#f2efeb",borderRadius:10,fontSize:12,color:"#8a8578"}}>
-          Barème IR 2026 (revenus 2025) — Quotient familial : <strong style={{color:"#1a1a2e"}}>{result?.nbParts} parts</strong>
-        </div>
+        <div style={{padding:"12px 16px",background:"#f2efeb",borderRadius:10,fontSize:12,color:"#8a8578"}}>Barème IR 2026 (revenus 2025) — Quotient familial : <strong style={{color:"#1a1a2e"}}>{result?.nbParts} parts</strong></div>
       </div>
     </div>
-    {/* Résultats */}
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       <div style={{background:"linear-gradient(135deg,#1a1a2e,#2d2b55)",borderRadius:16,padding:28,color:"#faf9f7"}}>
         <div style={{fontSize:12,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7a7890",marginBottom:8}}>Impôt estimé</div>
@@ -294,20 +262,9 @@ function TaxSimulator(){
   </div>);
 }
 
-// ============================================================
-// VIREMENT COMPONENT
-// ============================================================
 function VirementCalcul({charges,chargesMontants,revenus,annee,mois}){
   const cmByYear=chargesMontants.filter(r=>r.fields?.annee===annee);
   const results=MOIS_FULL.map((moisNom,m)=>{
-    let communL=0,communO=0,persoL=0,persoO=0;
-    charges.forEach(c=>{
-      const cm=cmByYear.find(r=>{const l=r.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===c.id&&r.fields?.mois===m+1;});
-      if(!cm)return;
-      const l=cm.fields?.lionel||0,o=cm.fields?.ophelie||0;
-      if(c.fields?.compte==="Perso"){persoL+=l;persoO+=o;}else{communL+=l;communO+=l;communO+=o;/* total commun */}
-    });
-    // Recalculate properly
     let totCommun=0,totPersoL=0,totPersoO=0;
     charges.forEach(c=>{
       const cm=cmByYear.find(r=>{const l=r.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===c.id&&r.fields?.mois===m+1;});
@@ -325,9 +282,7 @@ function VirementCalcul({charges,chargesMontants,revenus,annee,mois}){
   const current=results[mois];
   const thS={textAlign:"left",padding:"10px 12px",borderBottom:"2px solid #e8e4dd",color:"#8a8578",fontWeight:600,fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em"};
   const tdS={padding:"10px 12px",borderBottom:"1px solid #f2efeb",fontSize:13};
-
   return(<div style={{display:"flex",flexDirection:"column",gap:20}}>
-    {/* Current month highlight */}
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
       <div className="card-hover" style={{background:"#fff",borderRadius:16,padding:24,border:"1px solid rgba(26,26,46,0.06)",borderTop:"3px solid #1e40af"}}>
         <div style={{fontSize:11,fontWeight:600,color:"#8a8578",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Virement Lionel</div>
@@ -340,7 +295,6 @@ function VirementCalcul({charges,chargesMontants,revenus,annee,mois}){
         <div style={{fontSize:12,color:"#8a8578",marginTop:6}}>vers le compte commun — {MOIS_FULL[mois]}</div>
       </div>
     </div>
-    {/* Monthly table */}
     <div style={{background:"#fff",borderRadius:16,padding:24,border:"1px solid rgba(26,26,46,0.06)"}}>
       <h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:18,marginBottom:16}}>Récapitulatif mensuel {annee}</h3>
       <table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th style={thS}>Mois</th><th style={{...thS,textAlign:"right"}}>Charges Lionel</th><th style={{...thS,textAlign:"right"}}>Perso Lionel</th><th style={{...thS,textAlign:"right"}}>Virement Lionel</th><th style={{...thS,textAlign:"right"}}>Charges Ophélie</th><th style={{...thS,textAlign:"right"}}>Perso Ophélie</th><th style={{...thS,textAlign:"right"}}>Virement Ophélie</th></tr></thead><tbody>
@@ -358,9 +312,6 @@ function VirementCalcul({charges,chargesMontants,revenus,annee,mois}){
   </div>);
 }
 
-// ============================================================
-// ALERTS COMPONENT
-// ============================================================
 function Alerts({revenus,chargesMontants,epargneMontants,annee,mois}){
   const[dismissed,setDismissed]=useState(()=>{try{return JSON.parse(localStorage.getItem("budget_dismissed_alerts")||"[]");}catch{return[];}});
   const dismiss=(key)=>{const next=[...dismissed,key];setDismissed(next);localStorage.setItem("budget_dismissed_alerts",JSON.stringify(next));};
@@ -391,20 +342,15 @@ function Alerts({revenus,chargesMontants,epargneMontants,annee,mois}){
   </div>);
 }
 
-// ============================================================
-// MAIN APP COMPONENT
-// ============================================================
 export default function BudgetApp(){
   const[user,setUser]=useState(null);const[authChecked,setAuthChecked]=useState(false);const[tab,setTab]=useState("dashboard");const[loading,setLoading]=useState(true);const[saving,setSaving]=useState(false);const[mois,setMois]=useState(new Date().getMonth());const[annee,setAnnee]=useState(2026);const[chartType,setChartType]=useState("bar");
   const[revenus,setRevenus]=useState([]);const[charges,setCharges]=useState([]);const[chargesMontants,setChargesMontants]=useState([]);const[epargne,setEpargne]=useState([]);const[epargneMontants,setEpargneMontants]=useState([]);const[objectifs,setObjectifs]=useState([]);
   const[showAddCharge,setShowAddCharge]=useState(false);const[showAddEpargne,setShowAddEpargne]=useState(false);const[delCharge,setDelCharge]=useState(null);const[delEpargne,setDelEpargne]=useState(null);const[delObjectif,setDelObjectif]=useState(null);const[initYearTarget,setInitYearTarget]=useState(null);
-
   useEffect(()=>{const s=localStorage.getItem("budget_user");if(s){try{const u=JSON.parse(s);if(AUTHORIZED_EMAILS.includes(u.email))setUser(u);}catch{}}setAuthChecked(true);},[]);
   const loadData=useCallback(async()=>{setLoading(true);try{const[rev,chg,cm,ep,em,obj]=await Promise.all([fetchAll("Revenus"),fetchAll("Charges"),fetchAll("Charges_Montants"),fetchAll("Epargne"),fetchAll("Epargne_montants"),fetchAll("Objectifs")]);setRevenus(rev);setCharges(chg);setChargesMontants(cm);setEpargne(ep);setEpargneMontants(em);setObjectifs(obj);}catch(e){console.error(e);}setLoading(false);},[]);
   useEffect(()=>{if(user)loadData();},[user,loadData]);
   const save=async fn=>{setSaving(true);await fn();setTimeout(()=>setSaving(false),1500);};
   const logout=()=>{localStorage.removeItem("budget_user");setUser(null);};
-
   const revByYear=useMemo(()=>revenus.filter(r=>r.fields?.annee===annee),[revenus,annee]);
   const cmByYear=useMemo(()=>chargesMontants.filter(r=>r.fields?.annee===annee),[chargesMontants,annee]);
   const emByYear=useMemo(()=>epargneMontants.filter(r=>r.fields?.annee===annee),[epargneMontants,annee]);
@@ -417,22 +363,16 @@ export default function BudgetApp(){
   const availYears=useMemo(()=>{const y=new Set([2026,2027,2028,2029,2030]);revenus.forEach(r=>{if(r.fields?.annee)y.add(r.fields.annee);});return[...y].sort();},[revenus]);
   const chartData=useMemo(()=>MOIS.map((m,i)=>{const r=getRevMois(i);return{mois:m,revenus:r.lionel+r.ophelie,charges:totalChgMois(i),epargne:totalEpMois(i),solde:(r.lionel+r.ophelie)-totalChgMois(i)-totalEpMois(i)};}),[revByYear,cmByYear,emByYear]);
   const pieData=useMemo(()=>{const map={};charges.forEach(c=>{const cat=c.fields?.categorie||"Autre";const t=cmByYear.filter(cm=>{const l=cm.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===c.id&&cm.fields?.mois===mois+1;}).reduce((s,cm)=>s+(cm.fields.lionel||0)+(cm.fields.ophelie||0),0);map[cat]=(map[cat]||0)+t;});return Object.entries(map).filter(([,v])=>v>0).map(([name,value])=>({name,value}));},[charges,cmByYear,mois]);
-
-  // Alert count for badge
   const alertCount=useMemo(()=>{let c=0;for(let m=0;m<12;m++){const rev=revByYear.find(r=>r.fields?.mois===m+1);const revT=(rev?.fields?.lionel||0)+(rev?.fields?.ophelie||0);const chgT=cmByYear.filter(r=>r.fields?.mois===m+1).reduce((s,r)=>s+(r.fields.lionel||0)+(r.fields.ophelie||0),0);const epT=emByYear.filter(r=>r.fields?.mois===m+1).reduce((s,r)=>s+(r.fields.montant||0),0);if(revT-chgT-epT<0)c++;if(epT===0&&revT>0)c++;}return c;},[revByYear,cmByYear,emByYear]);
-
   const handleInitYear=async y=>{if(revenus.some(r=>r.fields?.annee===y)){setAnnee(y);return;}setInitYearTarget(y);};
   const doInitYear=async mode=>{const y=initYearTarget;const prevY=y-1;setInitYearTarget(null);setSaving(true);try{if(mode==="duplicate"){for(let m=1;m<=12;m++){const prev=revenus.find(r=>r.fields?.annee===prevY&&r.fields?.mois===m);await createRecord("Revenus",{mois:m,annee:y,lionel:prev?.fields?.lionel||0,ophelie:prev?.fields?.ophelie||0});}for(const c of charges){for(let m=1;m<=12;m++){const prev=chargesMontants.find(r=>{const l=r.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===c.id&&r.fields?.annee===prevY&&r.fields?.mois===m;});await createRecord("Charges_Montants",{mois:m,annee:y,lionel:prev?.fields?.lionel||0,ophelie:prev?.fields?.ophelie||0,charge_id:[c.id]});}}for(const ep of epargne){for(let m=1;m<=12;m++){const prev=epargneMontants.find(r=>{const l=r.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===ep.id&&r.fields?.annee===prevY&&r.fields?.mois===m;});await createRecord("Epargne_montants",{mois:m,annee:y,montant:prev?.fields?.montant||0,epargne_id:[ep.id]});}}}else{for(let m=1;m<=12;m++)await createRecord("Revenus",{mois:m,annee:y,lionel:0,ophelie:0});for(const c of charges)for(let m=1;m<=12;m++)await createRecord("Charges_Montants",{mois:m,annee:y,lionel:0,ophelie:0,charge_id:[c.id]});for(const ep of epargne)for(let m=1;m<=12;m++)await createRecord("Epargne_montants",{mois:m,annee:y,montant:0,epargne_id:[ep.id]});}await loadData();setAnnee(y);}catch(e){console.error(e);alert("Erreur");}setSaving(false);};
   const handleDeleteCharge=async(mode,selMois)=>{const c=delCharge;setDelCharge(null);await save(async()=>{if(mode==="all"){const cmIds=chargesMontants.filter(r=>{const l=r.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===c.id;}).map(r=>r.id);await batchDelete("Charges_Montants",cmIds);await deleteRecord("Charges",c.id);}else{for(const m of selMois){const cm=getCM(c.id,m);if(cm?.id)await updateRecord("Charges_Montants",cm.id,{lionel:0,ophelie:0});}}await loadData();});};
   const handleDeleteEpargne=async()=>{const ep=delEpargne;setDelEpargne(null);await save(async()=>{const emIds=epargneMontants.filter(r=>{const l=r.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===ep.id;}).map(r=>r.id);await batchDelete("Epargne_montants",emIds);await deleteRecord("Epargne",ep.id);await loadData();});};
   const handleDeleteObjectif=async()=>{const obj=delObjectif;setDelObjectif(null);await save(async()=>{await deleteRecord("Objectifs",obj.id);await loadData();});};
-
   if(!authChecked)return null;
   if(!user)return<LoginPage onLogin={setUser}/>;
   if(loading)return(<><GlobalStyles/><div className="grain"/><div style={{minHeight:"100vh",background:"#faf9f7",display:"flex",flexDirection:"column"}}><div style={{background:"#1a1a2e",padding:"20px 36px"}}><div style={{fontFamily:"'DM Serif Display',serif",color:"#faf9f7",fontSize:22}}>Budget Familial {annee}</div></div><div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{textAlign:"center"}}><div style={{width:40,height:40,border:"3px solid #e8e4dd",borderTopColor:"#1a1a2e",borderRadius:"50%",animation:"pulse 1s infinite",margin:"0 auto 16px"}}/><p style={{color:"#8a8578",fontSize:14}}>Chargement...</p></div></div></div></>);
-
   const rev=getRevMois(mois),chgT=totalChgMois(mois),epT=totalEpMois(mois),solde=(rev.lionel+rev.ophelie)-chgT-epT;
-  // Previous month: Jan compares with Dec N-1, others compare within same year
   const prevM=mois>0?mois-1:11;
   const prevAnnee=mois>0?annee:annee-1;
   const hasPrevData=revenus.some(r=>r.fields?.annee===prevAnnee);
@@ -453,11 +393,8 @@ export default function BudgetApp(){
   const bD={padding:"5px 10px",background:"transparent",color:"#b91c1c",border:"1px solid #f5c6c6",borderRadius:7,cursor:"pointer",fontSize:10,fontWeight:600};
   const mB=(a)=>({padding:"7px 14px",border:a?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:a?700:400,background:a?"rgba(26,26,46,0.06)":"#fff",color:a?"#1a1a2e":"#8a8578"});
   const tabs=[["dashboard","Tableau de bord"],["revenus","Revenus"],["charges","Charges"],["epargne","Épargne"],["objectifs","Objectifs"],["virements","Virements"],["impots","Simulateur IR"],["assistant","Assistant IA"],["alertes",`Alertes${alertCount>0?` (${alertCount})`:""}`],["immobilier","🏠 Immobilier"]];
-
   return(<><GlobalStyles/><div className="grain"/><div style={{minHeight:"100vh",background:"#faf9f7"}}>
     {saving&&<div className="fade-in" style={{position:"fixed",bottom:24,right:24,background:"#1a1a2e",color:"#faf9f7",padding:"10px 20px",borderRadius:12,fontSize:13,fontWeight:600,boxShadow:"0 8px 30px rgba(26,26,46,0.2)",zIndex:2000,display:"flex",alignItems:"center",gap:8}}><div style={{width:8,height:8,borderRadius:"50%",background:"#4ade80",animation:"pulse 1s infinite"}}/>Sauvegarde...</div>}
-
-    {/* HEADER */}
     <div style={{background:"#1a1a2e",padding:"0 max(16px,calc((100% - 1320px)/2 + 36px))",position:"sticky",top:0,zIndex:100}}><div className="header-inner">
       <div style={{display:"flex",alignItems:"center",gap:16}}><div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#2d2b55,#44427a)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#faf9f7" strokeWidth="2" strokeLinecap="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div><div><div style={{fontFamily:"'DM Serif Display',serif",color:"#faf9f7",fontSize:18}}>Budget Familial</div><div style={{color:"#7a7890",fontSize:11,fontWeight:500}}>Tchamfong · {annee}</div></div></div>
       <div style={{display:"flex",alignItems:"center",gap:14}}><div style={{display:"flex",gap:2,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:3}}>{availYears.map(y=><button key={y} className="btn-press" onClick={()=>handleInitYear(y)} style={{padding:"5px 14px",border:"none",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:annee===y?700:400,background:annee===y?"#fff":"transparent",color:annee===y?"#1a1a2e":"#7a7890"}}>{y}</button>)}</div>
@@ -465,13 +402,8 @@ export default function BudgetApp(){
       <div style={{width:1,height:28,background:"rgba(255,255,255,0.1)"}}/>
       <div style={{display:"flex",alignItems:"center",gap:10}}>{user.picture&&<img src={user.picture} style={{width:30,height:30,borderRadius:8,objectFit:"cover",border:"2px solid rgba(255,255,255,0.1)"}} alt="" referrerPolicy="no-referrer"/>}<div><div style={{color:"#faf9f7",fontSize:12,fontWeight:600}}>{user.name?.split(" ")[0]}</div><button onClick={logout} style={{background:"none",border:"none",color:"#7a7890",fontSize:10,cursor:"pointer",padding:0,fontFamily:"'DM Sans',sans-serif"}}>Déconnexion</button></div></div></div>
     </div></div>
-
-    {/* NAV */}
     <div style={{background:"#fff",borderBottom:"1px solid #e8e4dd",position:"sticky",top:68,zIndex:99}}><div className="nav-wrap">{tabs.map(([k,l])=><button key={k} className="btn-press" onClick={()=>setTab(k)} style={{padding:"8px 18px",border:"none",borderRadius:9,cursor:"pointer",fontSize:13,fontWeight:600,background:tab===k?"#1a1a2e":"transparent",color:tab===k?"#faf9f7":"#8a8578",whiteSpace:"nowrap",position:"relative"}}>{l}{k==="alertes"&&alertCount>0&&tab!==k&&<span style={{position:"absolute",top:-2,right:-2,width:8,height:8,borderRadius:"50%",background:"#b91c1c"}}/>}</button>)}</div></div>
-
     <div className="content-wrap">
-
-    {/* DASHBOARD */}
     {tab==="dashboard"&&<div style={{display:"flex",flexDirection:"column",gap:24}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:0}}>{MOIS_FULL[mois]} {annee}</h3><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{MOIS.map((m,i)=><button key={i} className="btn-press" style={mB(mois===i)} onClick={()=>setMois(i)}>{m}</button>)}</div></div>
       <div className="grid-kpi">{[["Revenus",rev.lionel+rev.ophelie,prevRev.lionel+prevRev.ophelie,"#1e40af"],["Charges",chgT,prevChg,"#b91c1c"],["Épargne",epT,prevEp,"#6d28d9"],["Solde",solde,prevSolde,solde>=0?"#15803d":"#b91c1c"]].map(([label,val,prev,color],i)=>{const diff=val-prev;const pct=prev>0?((diff/prev)*100).toFixed(0):0;const diffColor=diff>0?"#15803d":diff<0?"#b91c1c":"#8a8578";const arrowPath=diff>0?"M7 14l5-5 5 5":diff<0?"M7 10l5 5 5-5":"M5 12h14";const showArrow=hasPrevData&&prev>0;return<div key={label} className={`card-hover fade-up stagger-${i+1}`} style={{...CS,borderTop:`3px solid ${color}`,position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:-20,right:-20,width:80,height:80,borderRadius:"50%",background:`${color}08`}}/><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><span style={{fontSize:11,fontWeight:600,color:"#8a8578",textTransform:"uppercase",letterSpacing:"0.08em"}}>{label}</span></div><div style={{fontFamily:"'DM Serif Display',serif",fontSize:28,color}}>{fmt(val)}</div>{showArrow&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:8}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={diffColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d={arrowPath}/></svg><span style={{fontSize:11,fontWeight:600,color:diffColor}}>{diff>0?"+":""}{pct}% vs {MOIS[prevM]}{prevAnnee!==annee?` ${prevAnnee}`:""}</span></div>}</div>})}</div>
@@ -482,40 +414,21 @@ export default function BudgetApp(){
         <div className="fade-up stagger-3" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:18,margin:"0 0 16px"}}>Objectifs {annee}</h3><div style={{display:"flex",flexDirection:"column",gap:16}}>{objectifs.map(obj=>{const type=obj.fields?.type||"",target=obj.fields?.objectif_annuel||0;const actual=emByYear.reduce((s,em)=>{const e=epargne.find(e=>{const l=em.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===e.id;});if(!e)return s;if(type.includes(e.fields.type)&&(type.includes(e.fields.beneficiaire)||type.includes("Commun")))return s+(em.fields.montant||0);return s;},0);const pct=target>0?(actual/target)*100:0;return(<div key={obj.id}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:6}}><span style={{fontWeight:600}}>{type}</span><span style={{color:"#8a8578"}}>{fmt(actual)} / {fmt(target)}</span></div><div style={{height:6,borderRadius:3,background:"#f2efeb",overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:pct>=100?"linear-gradient(90deg,#15803d,#22c55e)":"linear-gradient(90deg,#1a1a2e,#44427a)",borderRadius:3,transition:"width .6s cubic-bezier(.4,0,.2,1)"}}/></div></div>);})}</div></div>
       </div>
     </div>}
-
-    {/* REVENUS */}
     {tab==="revenus"&&<div className="fade-up" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:"0 0 20px"}}>Revenus {annee}</h3><table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th style={thS}>Mois</th><th style={{...thS,textAlign:"right"}}>Lionel</th><th style={{...thS,textAlign:"right"}}>Ophélie</th><th style={{...thS,textAlign:"right"}}>Total</th><th style={{...thS,width:100}}></th></tr></thead><tbody>{MOIS_FULL.map((m,i)=>{const r=getRevMois(i);return<EditRow key={i} label={m} a={r.lionel} b={r.ophelie} tdS={tdS} iS={iS} bP={bP} bG={bG} onSave={async(a,b)=>{await save(async()=>{if(r.id){await updateRecord("Revenus",r.id,{lionel:a,ophelie:b});setRevenus(p=>p.map(x=>x.id===r.id?{...x,fields:{...x.fields,lionel:a,ophelie:b}}:x));}});}}/>;})}</tbody><tfoot><tr style={{fontWeight:700}}><td style={{...tdS,fontFamily:"'DM Serif Display',serif"}}>Total</td><td style={{...tdS,textAlign:"right"}}>{fmt(revByYear.reduce((s,r)=>s+(r.fields?.lionel||0),0))}</td><td style={{...tdS,textAlign:"right"}}>{fmt(revByYear.reduce((s,r)=>s+(r.fields?.ophelie||0),0))}</td><td style={{...tdS,textAlign:"right",fontFamily:"'DM Serif Display',serif"}}>{fmt(revByYear.reduce((s,r)=>s+(r.fields?.lionel||0)+(r.fields?.ophelie||0),0))}</td><td style={tdS}/></tr></tfoot></table></div>}
-
-    {/* CHARGES */}
     {tab==="charges"&&<div style={{display:"flex",flexDirection:"column",gap:18}}>
       <div className="fade-up" style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:0}}>Charges — {MOIS_FULL[mois]} {annee}</h3><div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{MOIS.map((m,i)=><button key={i} className="btn-press" style={mB(mois===i)} onClick={()=>setMois(i)}>{m}</button>)}</div><button className="btn-press" onClick={()=>setShowAddCharge(true)} style={{...bP,padding:"9px 18px"}}>+ Ajouter</button></div></div>
       {Object.entries(chargesByCat).map(([cat,chgs])=>{const ac=chgs.filter(c=>{const cm=getCM(c.id,mois);return cm&&(cm.lionel+cm.ophelie)>0;});const catT=ac.reduce((s,c)=>{const cm=getCM(c.id,mois);return s+(cm?cm.lionel+cm.ophelie:0);},0);if(ac.length===0)return null;return(<div key={cat} className="fade-up card-hover" style={CS}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><div style={{display:"inline-flex",alignItems:"center",gap:8}}><div style={{width:10,height:10,borderRadius:3,background:CAT_COLORS[cat]||"#8a8578"}}/><span style={{fontSize:13,fontWeight:700}}>{cat}</span></div><span style={{fontFamily:"'DM Serif Display',serif",fontSize:16,color:CAT_COLORS[cat]||"#1a1a2e"}}>{fmt(catT)}</span></div><table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th style={thS}>Description</th><th style={{...thS,width:90}}>Compte</th><th style={{...thS,textAlign:"right",width:100}}>Lionel</th><th style={{...thS,textAlign:"right",width:100}}>Ophélie</th><th style={{...thS,textAlign:"right",width:90}}>Total</th><th style={{...thS,width:90}}></th></tr></thead><tbody>{ac.map(c=>{const cm=getCM(c.id,mois);return<ChgRow key={c.id} charge={c} l={cm?.lionel||0} o={cm?.ophelie||0} tdS={tdS} iS={iS} bP={bP} bG={bG} bD={bD} onSave={async(l,o,newCompte)=>{await save(async()=>{if(cm?.id){await updateRecord("Charges_Montants",cm.id,{lionel:l,ophelie:o});setChargesMontants(p=>p.map(r=>r.id===cm.id?{...r,fields:{...r.fields,lionel:l,ophelie:o}}:r));}if(newCompte!==c.fields?.compte){await updateRecord("Charges",c.id,{compte:newCompte});setCharges(p=>p.map(r=>r.id===c.id?{...r,fields:{...r.fields,compte:newCompte}}:r));}});}} onDelete={()=>setDelCharge(c)}/>;})}</tbody></table></div>);})}
-      {/* TOTAUX DU MOIS */}
       <div className="fade-up" style={{...CS,borderTop:"3px solid #1a1a2e"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><span style={{fontFamily:"'DM Serif Display',serif",fontSize:18}}>Total charges — {MOIS_FULL[mois]}</span></div><div style={{display:"flex",gap:24,alignItems:"center"}}><div style={{textAlign:"right"}}><div style={{fontSize:10,color:"#8a8578",textTransform:"uppercase",fontWeight:600,letterSpacing:"0.08em"}}>Lionel</div><div style={{fontSize:18,fontWeight:700,fontVariantNumeric:"tabular-nums"}}>{fmt(cmByYear.filter(r=>r.fields?.mois===mois+1).reduce((s,r)=>s+(r.fields?.lionel||0),0))}</div></div><div style={{textAlign:"right"}}><div style={{fontSize:10,color:"#8a8578",textTransform:"uppercase",fontWeight:600,letterSpacing:"0.08em"}}>Ophélie</div><div style={{fontSize:18,fontWeight:700,fontVariantNumeric:"tabular-nums"}}>{fmt(cmByYear.filter(r=>r.fields?.mois===mois+1).reduce((s,r)=>s+(r.fields?.ophelie||0),0))}</div></div><div style={{textAlign:"right"}}><div style={{fontSize:10,color:"#8a8578",textTransform:"uppercase",fontWeight:600,letterSpacing:"0.08em"}}>Total</div><div style={{fontFamily:"'DM Serif Display',serif",fontSize:24,color:"#b91c1c"}}>{fmt(chgT)}</div></div></div></div></div>
     </div>}
-
-    {/* ÉPARGNE */}
     {tab==="epargne"&&<div style={{display:"flex",flexDirection:"column",gap:18}}>
       <div className="fade-up" style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:0}}>Épargne — {MOIS_FULL[mois]} {annee}</h3><div style={{display:"flex",gap:10,flexWrap:"wrap"}}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{MOIS.map((m,i)=><button key={i} className="btn-press" style={mB(mois===i)} onClick={()=>setMois(i)}>{m}</button>)}</div><button className="btn-press" onClick={()=>setShowAddEpargne(true)} style={{...bP,padding:"9px 18px"}}>+ Ajouter</button></div></div>
       <div className="fade-up" style={CS}><table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th style={thS}>Type</th><th style={thS}>Bénéficiaire</th><th style={{...thS,textAlign:"right",width:120}}>Montant</th><th style={{...thS,textAlign:"right",width:130}}>Cumul {annee}</th><th style={{...thS,width:130}}></th></tr></thead><tbody>{epargne.sort((a,b)=>(a.fields?.ordre||0)-(b.fields?.ordre||0)).map(ep=>{const em=getEM(ep.id,mois);const cumul=emByYear.filter(r=>{const l=r.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===ep.id;}).reduce((s,r)=>s+(r.fields?.montant||0),0);return<EpRow key={ep.id} ep={ep} montant={em?.montant||0} cumul={cumul} tdS={tdS} iS={iS} bP={bP} bG={bG} bD={bD} onSave={async v=>{await save(async()=>{if(em?.id){await updateRecord("Epargne_montants",em.id,{montant:v});setEpargneMontants(p=>p.map(r=>r.id===em.id?{...r,fields:{...r.fields,montant:v}}:r));}});}} onDelete={()=>setDelEpargne(ep)}/>;})}</tbody><tfoot><tr style={{fontWeight:700}}><td style={tdS} colSpan={2}><span style={{fontFamily:"'DM Serif Display',serif"}}>Total</span></td><td style={{...tdS,textAlign:"right"}}>{fmt(totalEpMois(mois))}</td><td style={{...tdS,textAlign:"right"}}>{fmt(emByYear.reduce((s,r)=>s+(r.fields?.montant||0),0))}</td><td style={tdS}/></tr></tfoot></table></div>
     </div>}
-
-    {/* OBJECTIFS */}
     {tab==="objectifs"&&<div className="fade-up" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:"0 0 20px"}}>Objectifs {annee}</h3><table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th style={thS}>Type</th><th style={{...thS,textAlign:"right",width:150}}>Objectif</th><th style={{...thS,textAlign:"right",width:150}}>Réalisé</th><th style={{...thS,width:200}}>Progression</th><th style={{...thS,width:130}}></th></tr></thead><tbody>{objectifs.map(obj=><ObjRow key={obj.id} obj={obj} epargne={epargne} emByYear={emByYear} tdS={tdS} iS={iS} bP={bP} bG={bG} bD={bD} onSave={async v=>{await save(async()=>{await updateRecord("Objectifs",obj.id,{objectif_annuel:v});setObjectifs(p=>p.map(r=>r.id===obj.id?{...r,fields:{...r.fields,objectif_annuel:v}}:r));});}} onDelete={()=>setDelObjectif(obj)}/>)}</tbody></table></div>}
-
-    {/* VIREMENTS */}
     {tab==="virements"&&<div className="fade-up"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:0}}>Virements compte commun — {MOIS_FULL[mois]} {annee}</h3><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{MOIS.map((m,i)=><button key={i} className="btn-press" style={mB(mois===i)} onClick={()=>setMois(i)}>{m}</button>)}</div></div><VirementCalcul charges={charges} chargesMontants={chargesMontants} revenus={revenus} annee={annee} mois={mois}/></div>}
-
-    {/* SIMULATEUR IR */}
     {tab==="impots"&&<div className="fade-up"><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:20}}>Simulateur Impôt sur le Revenu</h3><TaxSimulator/></div>}
-
-    {/* ASSISTANT IA */}
     {tab==="assistant"&&<div className="fade-up" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:16}}>Assistant budgétaire IA</h3><AIAssistant revenus={revenus} charges={charges} chargesMontants={chargesMontants} epargne={epargne} epargneMontants={epargneMontants} objectifs={objectifs} annee={annee}/></div>}
-
-    {/* ALERTES */}
     {tab==="alertes"&&<div className="fade-up"><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:16}}>Alertes {annee}</h3><Alerts revenus={revenus} chargesMontants={chargesMontants} epargneMontants={epargneMontants} annee={annee} mois={mois}/></div>}
-
-    {/* SIMULATEUR IMMOBILIER */}
     {tab==="immobilier"&&<div className="fade-up">
       <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:28,paddingBottom:20,borderBottom:"1px solid #e8e4dd"}}>
         <div style={{width:48,height:48,background:"linear-gradient(135deg,#1a3a5c,#2d5986)",borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>🏠</div>
@@ -526,12 +439,9 @@ export default function BudgetApp(){
       </div>
       <SimulateurImmobilier/>
     </div>}
-
     </div>
     <div style={{textAlign:"center",padding:"40px 0 24px",color:"#c4c0b8",fontSize:11}}>Budget Familial Tchamfong · {new Date().getFullYear()}</div>
   </div>
-
-  {/* MODALS */}
   {showAddCharge&&<AddChgModal cats={Object.keys(chargesByCat)} onClose={()=>setShowAddCharge(false)} onAdd={async d=>{await save(async()=>{const res=await createRecord("Charges",{description:d.description,categorie:d.categorie,compte:d.compte,ordre:charges.length+1});const nid=res.records[0].id;for(let m=0;m<12;m++)await createRecord("Charges_Montants",{mois:m+1,annee,lionel:d.moisList.includes(m)?d.lionel:0,ophelie:d.moisList.includes(m)?d.ophelie:0,charge_id:[nid]});await loadData();});setShowAddCharge(false);}}/>}
   {showAddEpargne&&<AddEpModal onClose={()=>setShowAddEpargne(false)} onAdd={async d=>{await save(async()=>{const res=await createRecord("Epargne",{type:d.type,beneficiaire:d.beneficiaire,ordre:epargne.length+1});const nid=res.records[0].id;for(let m=1;m<=12;m++)await createRecord("Epargne_montants",{mois:m,annee,montant:0,epargne_id:[nid]});if(d.objectif>0)await createRecord("Objectifs",{type:`${d.type} ${d.beneficiaire}`,objectif_annuel:d.objectif});await loadData();});setShowAddEpargne(false);}}/>}
   {delCharge&&<DeleteChargeModal charge={delCharge} onClose={()=>setDelCharge(null)} onDelete={handleDeleteCharge}/>}
@@ -541,11 +451,9 @@ export default function BudgetApp(){
   </>);
 }
 
-
 // ============================================================
 // SIMULATEUR IMMOBILIER
 // ============================================================
-// ─── DONNÉES ────────────────────────────────────────────────────────────────
 
 const TAUX = { 15: 2.85, 20: 3.05, 25: 3.20 };
 
@@ -586,9 +494,6 @@ const ANNONCES_BASE = [
   { ville: 'La Queue-en-Brie',      quartier: 'Centre',         surface: 120, chambres: 5, prix: 500000, terrain: 400, statut: 'nego' },
 ];
 
-// ─── UTILS ──────────────────────────────────────────────────────────────────
-
-
 function calcMensualite(capital, tauxAnnuel, dureeAns) {
   if (capital <= 0) return 0;
   const tm = tauxAnnuel / 100 / 12;
@@ -603,12 +508,8 @@ function calcCapacite(mensualite, tauxAnnuel, dureeAns) {
   return mensualite * ((1 - Math.pow(1 + tm, -n)) / tm);
 }
 
-// ─── COMPOSANT PRINCIPAL ────────────────────────────────────────────────────
-
 function SimulateurImmobilier() {
   const [activeTab, setActiveTab] = useState('simulation');
-
-  // Inputs
   const [revLionel,   setRevLionel]   = useState(3900);
   const [revOphelie,  setRevOphelie]  = useState(4200);
   const [tauxPAS,     setTauxPAS]     = useState(13.4);
@@ -620,23 +521,16 @@ function SimulateurImmobilier() {
   const [duree,       setDuree]       = useState(25);
   const [surfaceMin,  setSurfaceMin]  = useState(100);
   const [nbChambres,  setNbChambres]  = useState(4);
-
-  // Mode
   const [vendMaison,          setVendMaison]          = useState(true);
-  const [modeCalc,            setModeCalc]            = useState('auto'); // 'auto' | 'mensualite'
+  const [modeCalc,            setModeCalc]            = useState('auto');
   const [mensualiteSouhaitee, setMensualiteSouhaitee] = useState(2500);
-
-  // Filtres villes
   const [filterSecurite, setFilterSecurite] = useState(4);
   const [filterBudget,   setFilterBudget]   = useState(600000);
 
-  // ─── CALCULS ──────────────────────────────────────────────────────────────
   const calc = useCallback(() => {
     const revTotal    = revLionel + revOphelie;
     const revAvantPAS = revTotal / (1 - tauxPAS / 100);
     const mensMaxHCSF = revAvantPAS * 0.35;
-
-    // Apport vente
     let soldeVente = 0, fraisAgence = 0, ira = 0;
     if (vendMaison) {
       fraisAgence = prixVente * 0.04;
@@ -644,534 +538,219 @@ function SimulateurImmobilier() {
       soldeVente  = Math.max(0, prixVente - crd - fraisAgence - ira);
     }
     const apportTotal = apportPerso + soldeVente;
-
-    // Mensualité disponible
     let mensDisponible = mensMaxHCSF;
     if (!vendMaison) mensDisponible = mensMaxHCSF - mensActuelle;
-
-    const mensualiteUtilisee =
-      modeCalc === 'mensualite'
-        ? Math.min(mensualiteSouhaitee, mensDisponible)
-        : mensDisponible;
-
-    // Emprunt
+    const mensualiteUtilisee = modeCalc === 'mensualite' ? Math.min(mensualiteSouhaitee, mensDisponible) : mensDisponible;
     const taux     = TAUX[duree];
     const capacite = calcCapacite(mensualiteUtilisee, taux, duree);
     const budgetTotal = capacite + apportTotal;
     const budgetNet   = budgetTotal / 1.08;
-
     const emprunt  = budgetTotal - apportTotal;
     const mensFinal= calcMensualite(emprunt, taux, duree);
-    const endett   = revAvantPAS > 0
-      ? (mensFinal + (vendMaison ? 0 : mensActuelle)) / revAvantPAS * 100
-      : 0;
-
+    const endett   = revAvantPAS > 0 ? (mensFinal + (vendMaison ? 0 : mensActuelle)) / revAvantPAS * 100 : 0;
     const coutCredit  = mensFinal * duree * 12 - emprunt;
     const resteAVivre = revTotal - mensFinal - (vendMaison ? 0 : mensActuelle) - chargesFixes;
-
-    return {
-      revTotal, revAvantPAS, mensMaxHCSF,
-      soldeVente, fraisAgence, ira, apportTotal,
-      mensualiteUtilisee, mensDisponible,
-      taux, capacite, budgetTotal, budgetNet,
-      emprunt, mensFinal, endett, coutCredit, resteAVivre,
-    };
-  }, [
-    revLionel, revOphelie, tauxPAS, chargesFixes, apportPerso,
-    mensActuelle, crd, prixVente, duree, vendMaison,
-    modeCalc, mensualiteSouhaitee,
-  ]);
+    return { revTotal, revAvantPAS, mensMaxHCSF, soldeVente, fraisAgence, ira, apportTotal, mensualiteUtilisee, mensDisponible, taux, capacite, budgetTotal, budgetNet, emprunt, mensFinal, endett, coutCredit, resteAVivre };
+  }, [revLionel, revOphelie, tauxPAS, chargesFixes, apportPerso, mensActuelle, crd, prixVente, duree, vendMaison, modeCalc, mensualiteSouhaitee]);
 
   const r = calc();
 
-  // ─── RENDER ───────────────────────────────────────────────────────────────
   return (
     <div style={styles.root}>
-      {/* ── Header badges ── */}
       <div style={styles.headerBadges}>
-        <span style={styles.badge('#d4af37', '#7a5c00')}>
-          🏦 Taux {TAUX[duree].toFixed(2)}%
-        </span>
-        <span style={styles.badge(
-          r.endett <= 25 ? '#d1fae5' : r.endett <= 35 ? '#fef3c7' : '#fee2e2',
-          r.endett <= 25 ? '#065f46' : r.endett <= 35 ? '#92400e' : '#991b1b',
-        )}>
-          Endettement {r.endett.toFixed(1)}%
-        </span>
-        <span style={styles.badge('#e0e7ff', '#3730a3')}>
-          Mode {modeCalc === 'auto' ? 'Auto HCSF' : 'Manuel'}
-        </span>
+        <span style={styles.badge('#d4af37', '#7a5c00')}>🏦 Taux {TAUX[duree].toFixed(2)}%</span>
+        <span style={styles.badge(r.endett <= 25 ? '#d1fae5' : r.endett <= 35 ? '#fef3c7' : '#fee2e2', r.endett <= 25 ? '#065f46' : r.endett <= 35 ? '#92400e' : '#991b1b')}>Endettement {r.endett.toFixed(1)}%</span>
+        <span style={styles.badge('#e0e7ff', '#3730a3')}>Mode {modeCalc === 'auto' ? 'Auto HCSF' : 'Manuel'}</span>
       </div>
-
-      {/* ── Onglets internes ── */}
       <div style={styles.tabs}>
-        {[
-          { id: 'simulation',   label: '📊 Simulation' },
-          { id: 'annonces',     label: '🏡 Annonces' },
-          { id: 'scenarios',    label: '⚖️ Scénarios' },
-          { id: 'villes',       label: '📍 Villes' },
-          { id: 'transactions', label: '🔍 Transactions DVF' },
-        ].map(t => (
-          <button
-            key={t.id}
-            onClick={() => setActiveTab(t.id)}
-            style={activeTab === t.id ? styles.tabActive : styles.tab}
-          >
-            {t.label}
-          </button>
+        {[{ id: 'simulation', label: '📊 Simulation' }, { id: 'annonces', label: '🏡 Annonces' }, { id: 'scenarios', label: '⚖️ Scénarios' }, { id: 'villes', label: '📍 Villes' }, { id: 'transactions', label: '🔍 Transactions DVF' }].map(t => (
+          <button key={t.id} onClick={() => setActiveTab(t.id)} style={activeTab === t.id ? styles.tabActive : styles.tab}>{t.label}</button>
         ))}
       </div>
 
-      {/* ════════════════════════════════════════════════════════════════════
-          TAB : SIMULATION
-      ════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'simulation' && (
         <div style={styles.simGrid}>
-
-          {/* ── Colonne gauche : formulaires ── */}
           <div>
-            {/* Mode de calcul */}
             <Card title="⚙️ Mode de calcul">
               <div style={styles.modeToggle}>
-                {['auto', 'mensualite'].map(m => (
-                  <button
-                    key={m}
-                    onClick={() => setModeCalc(m)}
-                    style={modeCalc === m ? styles.modeBtnActive : styles.modeBtn}
-                  >
-                    {m === 'auto' ? 'Auto (HCSF max)' : 'Je choisis ma mensualité'}
-                  </button>
-                ))}
+                {['auto', 'mensualite'].map(m => (<button key={m} onClick={() => setModeCalc(m)} style={modeCalc === m ? styles.modeBtnActive : styles.modeBtn}>{m === 'auto' ? 'Auto (HCSF max)' : 'Je choisis ma mensualité'}</button>))}
               </div>
               {modeCalc === 'mensualite' && (
                 <div style={styles.sliderBox}>
-                  <div style={styles.sliderHeader}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1a3a5c' }}>Mensualité souhaitée</span>
-                    <span style={{ fontSize: 18, fontWeight: 700, color: '#c9a84c' }}>{fmt(mensualiteSouhaitee)}/mois</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={500}
-                    max={Math.round(r.mensMaxHCSF)}
-                    step={50}
-                    value={mensualiteSouhaitee}
-                    onChange={e => setMensualiteSouhaitee(+e.target.value)}
-                    style={styles.slider}
-                  />
-                  <div style={styles.sliderLabels}>
-                    <span>500 €</span>
-                    <span>Max HCSF : {fmt(r.mensMaxHCSF)}</span>
-                  </div>
+                  <div style={styles.sliderHeader}><span style={{ fontSize: 13, fontWeight: 600, color: '#1a3a5c' }}>Mensualité souhaitée</span><span style={{ fontSize: 18, fontWeight: 700, color: '#c9a84c' }}>{fmt(mensualiteSouhaitee)}/mois</span></div>
+                  <input type="range" min={500} max={Math.round(r.mensMaxHCSF)} step={50} value={mensualiteSouhaitee} onChange={e => setMensualiteSouhaitee(+e.target.value)} style={styles.slider}/>
+                  <div style={styles.sliderLabels}><span>500 €</span><span>Max HCSF : {fmt(r.mensMaxHCSF)}</span></div>
                 </div>
               )}
-              {modeCalc === 'auto' && (
-                <p style={{ fontSize: 12, color: '#8a9ab0', marginTop: 8 }}>
-                  Budget calculé selon la règle HCSF (35 % max d&apos;endettement)
-                </p>
-              )}
+              {modeCalc === 'auto' && <p style={{ fontSize: 12, color: '#8a9ab0', marginTop: 8 }}>Budget calculé selon la règle HCSF (35 % max d&apos;endettement)</p>}
             </Card>
-
-            {/* Revenus */}
             <Card title="💰 Revenus du foyer">
               <div style={styles.formGrid}>
-                <FormField label="Revenu net Lionel (après PAS)" hint="Freelance portage salarial HIWAY" suffix="€/mois">
-                  <NumInput value={revLionel} onChange={setRevLionel} />
-                </FormField>
-                <FormField label="Revenu net Ophélie (après PAS)" hint="CDI" suffix="€/mois">
-                  <NumInput value={revOphelie} onChange={setRevOphelie} />
-                </FormField>
-                <FormField label="Taux PAS" suffix="%">
-                  <NumInput value={tauxPAS} onChange={setTauxPAS} step={0.1} />
-                </FormField>
-                <FormField label="Charges fixes mensuelles" hint="Hors crédit immobilier" suffix="€/mois">
-                  <NumInput value={chargesFixes} onChange={setChargesFixes} />
-                </FormField>
+                <FormField label="Revenu net Lionel (après PAS)" hint="Freelance portage salarial HIWAY" suffix="€/mois"><NumInput value={revLionel} onChange={setRevLionel}/></FormField>
+                <FormField label="Revenu net Ophélie (après PAS)" hint="CDI" suffix="€/mois"><NumInput value={revOphelie} onChange={setRevOphelie}/></FormField>
+                <FormField label="Taux PAS" suffix="%"><NumInput value={tauxPAS} onChange={setTauxPAS} step={0.1}/></FormField>
+                <FormField label="Charges fixes mensuelles" hint="Hors crédit immobilier" suffix="€/mois"><NumInput value={chargesFixes} onChange={setChargesFixes}/></FormField>
               </div>
             </Card>
-
-            {/* Situation actuelle */}
             <Card title="🏠 Maison actuelle (83 rue É. Maury)">
               <div style={styles.toggleRow}>
-                <div
-                  onClick={() => setVendMaison(v => !v)}
-                  style={{ ...styles.toggle, background: vendMaison ? '#c9a84c' : '#c8d5e3', cursor: 'pointer' }}
-                >
-                  <div style={{ ...styles.toggleDot, transform: vendMaison ? 'translateX(22px)' : 'none' }} />
+                <div onClick={() => setVendMaison(v => !v)} style={{ ...styles.toggle, background: vendMaison ? '#c9a84c' : '#c8d5e3', cursor: 'pointer' }}>
+                  <div style={{ ...styles.toggleDot, transform: vendMaison ? 'translateX(22px)' : 'none' }}/>
                 </div>
                 <span style={{ fontSize: 14, color: '#2d4a6d' }}>Je vends ma maison avant d&apos;acheter</span>
               </div>
               <div style={styles.formGrid}>
-                <FormField label="Mensualité crédit actuel" suffix="€/mois">
-                  <NumInput value={mensActuelle} onChange={setMensActuelle} />
-                </FormField>
-                <FormField label="Capital restant dû" hint="Rang 88 du tableau (avril 2026)" suffix="€">
-                  <NumInput value={crd} onChange={setCrd} />
-                </FormField>
-                {vendMaison && (
-                  <FormField label="Prix de vente estimé" hint="72m² Carrez + 35m² niv.0 • Plateau Fontenay" suffix="€" full>
-                    <NumInput value={prixVente} onChange={setPrixVente} />
-                  </FormField>
-                )}
+                <FormField label="Mensualité crédit actuel" suffix="€/mois"><NumInput value={mensActuelle} onChange={setMensActuelle}/></FormField>
+                <FormField label="Capital restant dû" hint="Rang 88 du tableau (avril 2026)" suffix="€"><NumInput value={crd} onChange={setCrd}/></FormField>
+                {vendMaison && <FormField label="Prix de vente estimé" hint="72m² Carrez + 35m² niv.0 • Plateau Fontenay" suffix="€" full><NumInput value={prixVente} onChange={setPrixVente}/></FormField>}
               </div>
             </Card>
-
-            {/* Paramètres prêt */}
             <Card title="📈 Paramètres du prêt">
               <div style={styles.formGrid}>
-                <FormField label="Apport personnel (hors vente)" hint="PEE Ophélie, épargne…" suffix="€">
-                  <NumInput value={apportPerso} onChange={setApportPerso} />
-                </FormField>
-                <FormField label="Durée du prêt">
-                  <select
-                    value={duree}
-                    onChange={e => setDuree(+e.target.value)}
-                    style={styles.select}
-                  >
-                    <option value={15}>15 ans (2.85%)</option>
-                    <option value={20}>20 ans (3.05%)</option>
-                    <option value={25}>25 ans (3.20%)</option>
-                  </select>
-                </FormField>
-                <FormField label="Surface recherchée" suffix="m²">
-                  <NumInput value={surfaceMin} onChange={setSurfaceMin} />
-                </FormField>
-                <FormField label="Nombre de chambres">
-                  <select
-                    value={nbChambres}
-                    onChange={e => setNbChambres(+e.target.value)}
-                    style={styles.select}
-                  >
-                    <option value={3}>3 chambres</option>
-                    <option value={4}>4 chambres</option>
-                    <option value={5}>5 chambres</option>
-                  </select>
-                </FormField>
+                <FormField label="Apport personnel (hors vente)" hint="PEE Ophélie, épargne…" suffix="€"><NumInput value={apportPerso} onChange={setApportPerso}/></FormField>
+                <FormField label="Durée du prêt"><select value={duree} onChange={e => setDuree(+e.target.value)} style={styles.select}><option value={15}>15 ans (2.85%)</option><option value={20}>20 ans (3.05%)</option><option value={25}>25 ans (3.20%)</option></select></FormField>
+                <FormField label="Surface recherchée" suffix="m²"><NumInput value={surfaceMin} onChange={setSurfaceMin}/></FormField>
+                <FormField label="Nombre de chambres"><select value={nbChambres} onChange={e => setNbChambres(+e.target.value)} style={styles.select}><option value={3}>3 chambres</option><option value={4}>4 chambres</option><option value={5}>5 chambres</option></select></FormField>
               </div>
             </Card>
           </div>
-
-          {/* ── Colonne droite : résultats ── */}
           <div>
-            {/* Budget hero */}
             <div style={styles.budgetHero}>
               <div style={styles.budgetHeroGrid}>
-                <div>
-                  <p style={styles.budgetLabel}>Budget net (hors notaire)</p>
-                  <p style={styles.budgetValueLarge}>{fmt(r.budgetNet)}</p>
-                  <p style={styles.budgetNote}>Prix d&apos;achat maximum</p>
-                </div>
-                <div style={{ width: 1, background: 'rgba(255,255,255,0.2)' }} />
-                <div>
-                  <p style={styles.budgetLabel}>Budget tout compris</p>
-                  <p style={{ ...styles.budgetValueLarge, fontSize: 22 }}>{fmt(r.budgetTotal)}</p>
-                  <p style={styles.budgetNote}>Frais notaire inclus (~8%)</p>
-                </div>
+                <div><p style={styles.budgetLabel}>Budget net (hors notaire)</p><p style={styles.budgetValueLarge}>{fmt(r.budgetNet)}</p><p style={styles.budgetNote}>Prix d&apos;achat maximum</p></div>
+                <div style={{ width: 1, background: 'rgba(255,255,255,0.2)' }}/>
+                <div><p style={styles.budgetLabel}>Budget tout compris</p><p style={{ ...styles.budgetValueLarge, fontSize: 22 }}>{fmt(r.budgetTotal)}</p><p style={styles.budgetNote}>Frais notaire inclus (~8%)</p></div>
               </div>
             </div>
-
-            {/* Décomposition apport */}
             <Card title="💎 Décomposition de l'apport">
-              {vendMaison && (
-                <>
-                  <ApportRow label="Prix de vente maison"    value={fmt(prixVente)} />
-                  <ApportRow label="− Capital restant dû"    value={'−' + fmt(crd)}        indent color="#dc2626" />
-                  <ApportRow label="− Frais agence (4%)"     value={'−' + fmt(r.fraisAgence)} indent color="#dc2626" />
-                  <ApportRow label="− IRA (remb. anticipé)"  value={'−' + fmt(r.ira)}      indent color="#dc2626" />
-                  <div style={styles.soldeVenteRow}>
-                    <span style={{ fontWeight: 600 }}>= Solde net vente</span>
-                    <span style={{ fontWeight: 700, color: '#16a34a', fontSize: 15 }}>{fmt(r.soldeVente)}</span>
-                  </div>
-                </>
-              )}
-              <ApportRow label="Apport personnel" value={fmt(apportPerso)} />
-              <ApportRow label="APPORT TOTAL" value={fmt(r.apportTotal)} total color="#16a34a" />
+              {vendMaison && (<>
+                <ApportRow label="Prix de vente maison" value={fmt(prixVente)}/>
+                <ApportRow label="− Capital restant dû" value={'−' + fmt(crd)} indent color="#dc2626"/>
+                <ApportRow label="− Frais agence (4%)" value={'−' + fmt(r.fraisAgence)} indent color="#dc2626"/>
+                <ApportRow label="− IRA (remb. anticipé)" value={'−' + fmt(r.ira)} indent color="#dc2626"/>
+                <div style={styles.soldeVenteRow}><span style={{ fontWeight: 600 }}>= Solde net vente</span><span style={{ fontWeight: 700, color: '#16a34a', fontSize: 15 }}>{fmt(r.soldeVente)}</span></div>
+              </>)}
+              <ApportRow label="Apport personnel" value={fmt(apportPerso)}/>
+              <ApportRow label="APPORT TOTAL" value={fmt(r.apportTotal)} total color="#16a34a"/>
             </Card>
-
-            {/* Récapitulatif calculs */}
             <Card>
-              <ApportRow label="Revenus avant PAS"       value={fmt(r.revAvantPAS) + '/mois'} />
-              <ApportRow label="Mensualité max HCSF (35%)" value={fmt(r.mensMaxHCSF) + '/mois'} />
-              <ApportRow label="Capacité d'emprunt"      value={fmt(r.capacite)} />
+              <ApportRow label="Revenus avant PAS" value={fmt(r.revAvantPAS) + '/mois'}/>
+              <ApportRow label="Mensualité max HCSF (35%)" value={fmt(r.mensMaxHCSF) + '/mois'}/>
+              <ApportRow label="Capacité d'emprunt" value={fmt(r.capacite)}/>
               <div style={{ borderTop: '1px solid #e8dcc8', marginTop: 8, paddingTop: 8 }}>
-                <ApportRow
-                  label="Mensualité finale"
-                  value={fmt(r.mensFinal) + '/mois'}
-                  bold
-                  color="#c9a84c"
-                />
+                <ApportRow label="Mensualité finale" value={fmt(r.mensFinal) + '/mois'} bold color="#c9a84c"/>
               </div>
-              <ApportRow label="Coût total du crédit" value={fmt(r.coutCredit)} color="#d97706" />
-              <ApportRow
-                label="Reste à vivre"
-                value={fmt(r.resteAVivre) + '/mois'}
-                color={r.resteAVivre >= 2000 ? '#16a34a' : r.resteAVivre >= 1500 ? '#d97706' : '#dc2626'}
-              />
+              <ApportRow label="Coût total du crédit" value={fmt(r.coutCredit)} color="#d97706"/>
+              <ApportRow label="Reste à vivre" value={fmt(r.resteAVivre) + '/mois'} color={r.resteAVivre >= 2000 ? '#16a34a' : r.resteAVivre >= 1500 ? '#d97706' : '#dc2626'}/>
             </Card>
-
-            {/* Taux d'endettement */}
             <Card>
               <div style={{ marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                   <span style={{ fontSize: 13, color: '#5a7a9a' }}>Taux d&apos;endettement</span>
-                  <span style={{
-                    fontSize: 18, fontWeight: 700,
-                    color: r.endett <= 25 ? '#16a34a' : r.endett <= 35 ? '#d97706' : '#dc2626',
-                  }}>
-                    {r.endett.toFixed(1)}%
-                  </span>
+                  <span style={{ fontSize: 18, fontWeight: 700, color: r.endett <= 25 ? '#16a34a' : r.endett <= 35 ? '#d97706' : '#dc2626' }}>{r.endett.toFixed(1)}%</span>
                 </div>
                 <div style={styles.progressBar}>
-                  <div style={{
-                    ...styles.progressFill,
-                    width: Math.min(r.endett / 45 * 100, 100) + '%',
-                    background: r.endett <= 25 ? '#16a34a' : r.endett <= 35 ? '#f59e0b' : '#ef4444',
-                  }} />
-                  {/* Marqueur 35% */}
-                  <div style={{ ...styles.progressMarker, left: (35 / 45 * 100) + '%' }} />
+                  <div style={{ ...styles.progressFill, width: Math.min(r.endett / 45 * 100, 100) + '%', background: r.endett <= 25 ? '#16a34a' : r.endett <= 35 ? '#f59e0b' : '#ef4444' }}/>
+                  <div style={{ ...styles.progressMarker, left: (35 / 45 * 100) + '%' }}/>
                 </div>
-                <div style={styles.progressLabels}>
-                  <span>0%</span>
-                  <span>Confort : 25%</span>
-                  <span style={{ color: '#ef4444' }}>Max : 35%</span>
-                  <span>45%</span>
-                </div>
+                <div style={styles.progressLabels}><span>0%</span><span>Confort : 25%</span><span style={{ color: '#ef4444' }}>Max : 35%</span><span>45%</span></div>
               </div>
-              <div style={{
-                ...styles.statusBadge,
-                background: r.endett <= 35 ? '#d1fae5' : '#fee2e2',
-                color: r.endett <= 35 ? '#065f46' : '#991b1b',
-              }}>
-                {r.endett <= 35
-                  ? '✓ Conforme HCSF — Financement validé'
-                  : '✗ Dépasse 35% — Financement refusé'}
+              <div style={{ ...styles.statusBadge, background: r.endett <= 35 ? '#d1fae5' : '#fee2e2', color: r.endett <= 35 ? '#065f46' : '#991b1b' }}>
+                {r.endett <= 35 ? '✓ Conforme HCSF — Financement validé' : '✗ Dépasse 35% — Financement refusé'}
               </div>
             </Card>
           </div>
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════════════════
-          TAB : ANNONCES
-      ════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'annonces' && (
         <div>
           <div style={styles.annoncesHeader}>
-            <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a3a5c' }}>
-              Maisons disponibles dans votre budget
-            </h3>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a3a5c' }}>Maisons disponibles dans votre budget</h3>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {[
-                { label: '🔍 SeLoger',    href: `https://www.seloger.com/list.htm?projects=2&types=2&places=[{ci:940}]&price=${Math.round(r.budgetNet * 0.7)}/${Math.round(r.budgetNet)}&surface=${surfaceMin}/NaN&rooms=4,5` },
-                { label: '🟠 LeBonCoin',  href: `https://www.leboncoin.fr/recherche?category=9&locations=Val-de-Marne&real_estate_type=house&price=${Math.round(r.budgetNet * 0.7)}-${Math.round(r.budgetNet)}&square=${surfaceMin}-max` },
-                { label: "🏠 Bien'ici",   href: `https://www.bienici.com/recherche/achat/val-de-marne-94/maison?prix-max=${Math.round(r.budgetNet)}&surface-min=${surfaceMin}&nb-pieces-min=4` },
-              ].map(l => (
-                <a key={l.label} href={l.href} target="_blank" rel="noreferrer" style={styles.linkBtn}>
-                  {l.label}
-                </a>
+              {[{ label: '🔍 SeLoger', href: `https://www.seloger.com/list.htm?projects=2&types=2&places=[{ci:940}]&price=${Math.round(r.budgetNet * 0.7)}/${Math.round(r.budgetNet)}&surface=${surfaceMin}/NaN&rooms=4,5` }, { label: '🟠 LeBonCoin', href: `https://www.leboncoin.fr/recherche?category=9&locations=Val-de-Marne&real_estate_type=house&price=${Math.round(r.budgetNet * 0.7)}-${Math.round(r.budgetNet)}&square=${surfaceMin}-max` }, { label: "🏠 Bien'ici", href: `https://www.bienici.com/recherche/achat/val-de-marne-94/maison?prix-max=${Math.round(r.budgetNet)}&surface-min=${surfaceMin}&nb-pieces-min=4` }].map(l => (
+                <a key={l.label} href={l.href} target="_blank" rel="noreferrer" style={styles.linkBtn}>{l.label}</a>
               ))}
             </div>
           </div>
-
-          <div style={styles.infoBox}>
-            <span>ℹ️</span>
-            <span>
-              <strong>Annonces simulées</strong> basées sur les prix DVF 2024-2025 du Val-de-Marne.
-              Cliquez sur les liens ci-dessus pour voir les vraies annonces avec vos critères pré-remplis.
-            </span>
-          </div>
-
+          <div style={styles.infoBox}><span>ℹ️</span><span><strong>Annonces simulées</strong> basées sur les prix DVF 2024-2025 du Val-de-Marne. Cliquez sur les liens ci-dessus pour voir les vraies annonces avec vos critères pré-remplis.</span></div>
           <div style={styles.annoncesGrid}>
-            {ANNONCES_BASE
-              .filter(a => a.surface >= surfaceMin - 15)
-              .map((a, i) => {
-                const overBy    = a.prix - r.budgetNet;
-                const inBudget  = overBy <= 0;
-                const slightly  = !inBudget && overBy <= 50000;
-                const statusCls = inBudget ? 'in' : slightly ? 'slight' : 'out';
-                const statusTxt = inBudget
-                  ? '✓ Dans votre budget'
-                  : slightly
-                  ? `⚠ ${fmt(overBy)} au-dessus`
-                  : `✗ Hors budget (+${fmt(overBy)})`;
-                const statusStyle = {
-                  in:     { bg: '#d1fae5', color: '#065f46' },
-                  slight: { bg: '#fef3c7', color: '#92400e' },
-                  out:    { bg: '#fee2e2', color: '#991b1b' },
-                }[statusCls];
-
-                return (
-                  <div key={i} style={styles.annonceCard}>
-                    <div style={styles.annonceImg}>
-                      🏡
-                      {a.statut === 'new'  && <span style={{ ...styles.annonceBadge, background: '#22c55e' }}>Nouveau</span>}
-                      {a.statut === 'nego' && <span style={{ ...styles.annonceBadge, background: '#f59e0b' }}>Négociable</span>}
-                    </div>
-                    <div style={styles.annonceBody}>
-                      <div>
-                        <span style={{ fontSize: 18, fontWeight: 700, color: '#1a3a5c' }}>{fmt(a.prix)}</span>
-                        <span style={{ fontSize: 12, color: '#8a9ab0', marginLeft: 6 }}>
-                          {Math.round(a.prix / a.surface).toLocaleString('fr-FR')} €/m²
-                        </span>
-                      </div>
-                      <p style={{ fontWeight: 600, color: '#2d4a6d', margin: '6px 0 2px' }}>
-                        Maison {a.chambres} chambres
-                      </p>
-                      <p style={{ fontSize: 13, color: '#8a9ab0', marginBottom: 10 }}>
-                        {a.ville} — {a.quartier}
-                      </p>
-                      <div style={styles.annonceSpecs}>
-                        <span>⬛ {a.surface} m²</span>
-                        <span>🏠 {a.chambres} ch.</span>
-                        <span>🌿 {a.terrain} m²</span>
-                      </div>
-                      <div style={{ ...styles.annonceStatus, background: statusStyle.bg, color: statusStyle.color }}>
-                        {statusTxt}
-                      </div>
-                    </div>
+            {ANNONCES_BASE.filter(a => a.surface >= surfaceMin - 15).map((a, i) => {
+              const overBy = a.prix - r.budgetNet;
+              const inBudget = overBy <= 0;
+              const slightly = !inBudget && overBy <= 50000;
+              const statusCls = inBudget ? 'in' : slightly ? 'slight' : 'out';
+              const statusTxt = inBudget ? '✓ Dans votre budget' : slightly ? `⚠ ${fmt(overBy)} au-dessus` : `✗ Hors budget (+${fmt(overBy)})`;
+              const statusStyle = { in: { bg: '#d1fae5', color: '#065f46' }, slight: { bg: '#fef3c7', color: '#92400e' }, out: { bg: '#fee2e2', color: '#991b1b' } }[statusCls];
+              return (
+                <div key={i} style={styles.annonceCard}>
+                  <div style={styles.annonceImg}>🏡{a.statut === 'new' && <span style={{ ...styles.annonceBadge, background: '#22c55e' }}>Nouveau</span>}{a.statut === 'nego' && <span style={{ ...styles.annonceBadge, background: '#f59e0b' }}>Négociable</span>}</div>
+                  <div style={styles.annonceBody}>
+                    <div><span style={{ fontSize: 18, fontWeight: 700, color: '#1a3a5c' }}>{fmt(a.prix)}</span><span style={{ fontSize: 12, color: '#8a9ab0', marginLeft: 6 }}>{Math.round(a.prix / a.surface).toLocaleString('fr-FR')} €/m²</span></div>
+                    <p style={{ fontWeight: 600, color: '#2d4a6d', margin: '6px 0 2px' }}>Maison {a.chambres} chambres</p>
+                    <p style={{ fontSize: 13, color: '#8a9ab0', marginBottom: 10 }}>{a.ville} — {a.quartier}</p>
+                    <div style={styles.annonceSpecs}><span>⬛ {a.surface} m²</span><span>🏠 {a.chambres} ch.</span><span>🌿 {a.terrain} m²</span></div>
+                    <div style={{ ...styles.annonceStatus, background: statusStyle.bg, color: statusStyle.color }}>{statusTxt}</div>
                   </div>
-                );
-              })}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════════════════
-          TAB : SCÉNARIOS
-      ════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'scenarios' && (
         <div>
-          <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a3a5c', marginBottom: 20 }}>
-            Comparaison des scénarios
-          </h3>
-          <ScenariosGrid r={r} duree={duree} chargesFixes={chargesFixes} vendMaison={vendMaison}
-            apportPerso={apportPerso} mensActuelle={mensActuelle} crd={crd} prixVente={prixVente} />
-          <div style={{ ...styles.infoBox, marginTop: 20 }}>
-            <span>💡</span>
-            <span>
-              <strong>Recommandation :</strong> Le scénario &quot;Vente puis achat&quot; est le plus sûr.
-              Tu récupères l'apport de la vente et tu n'as qu'un seul crédit à gérer.
-              Le scénario investissement locatif nécessite un taux d'endettement actuel très bas.
-            </span>
-          </div>
+          <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a3a5c', marginBottom: 20 }}>Comparaison des scénarios</h3>
+          <ScenariosGrid r={r} duree={duree} chargesFixes={chargesFixes} vendMaison={vendMaison} apportPerso={apportPerso} mensActuelle={mensActuelle} crd={crd} prixVente={prixVente}/>
+          <div style={{ ...styles.infoBox, marginTop: 20 }}><span>💡</span><span><strong>Recommandation :</strong> Le scénario &quot;Vente puis achat&quot; est le plus sûr. Tu récupères l'apport de la vente et tu n'as qu'un seul crédit à gérer. Le scénario investissement locatif nécessite un taux d'endettement actuel très bas.</span></div>
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════════════════
-          TAB : VILLES
-      ════════════════════════════════════════════════════════════════════ */}
-      {activeTab === 'transactions' && (
-        <RechercheRueDVF styles={styles} />
-      )}
+      {activeTab === 'transactions' && <RechercheRueDVF styles={styles}/>}
 
-      {activeTab === 'villes' && (
-        <VillesDVF
-          villes={VILLES}
-          filterSecurite={filterSecurite}
-          setFilterSecurite={setFilterSecurite}
-          filterBudget={filterBudget}
-          setFilterBudget={setFilterBudget}
-          surfaceMin={surfaceMin}
-          fmtFn={fmt}
-          styles={styles}
-          FormField={FormField}
-          NumInput={NumInput}
-          Card={Card}
-        />
-      )}
+      {activeTab === 'villes' && <VillesDVF villes={VILLES} filterSecurite={filterSecurite} setFilterSecurite={setFilterSecurite} filterBudget={filterBudget} setFilterBudget={setFilterBudget} surfaceMin={surfaceMin} fmtFn={fmt} styles={styles} FormField={FormField} NumInput={NumInput} Card={Card}/>}
 
-      {/* ── Footer ── */}
-      <div style={styles.footer}>
-        Simulation indicative • Données DVF Val-de-Marne 2024-2025 • Taux avril 2026 • Règles HCSF (35% max)
-      </div>
+      <div style={styles.footer}>Simulation indicative • Données DVF Val-de-Marne 2024-2025 • Taux avril 2026 • Règles HCSF (35% max)</div>
     </div>
   );
 }
 
-// ─── SOUS-COMPOSANTS ────────────────────────────────────────────────────────
-
 function ScenariosGrid({ r, duree, chargesFixes, apportPerso, mensActuelle, crd, prixVente }) {
-  const taux   = TAUX[duree];
+  const taux = TAUX[duree];
   const fraisAgence = prixVente * 0.04;
-  const ira         = Math.min(crd * 0.03, mensActuelle * 6);
-  const soldeVente  = Math.max(0, prixVente - crd - fraisAgence - ira);
+  const ira = Math.min(crd * 0.03, mensActuelle * 6);
+  const soldeVente = Math.max(0, prixVente - crd - fraisAgence - ira);
   const apportTotal = apportPerso + soldeVente;
-
-  // Scénario 1 : Vente puis achat
   const mensMax1 = r.revAvantPAS * 0.35;
-  const cap1     = calcCapacite(mensMax1, taux, duree);
-  const budget1  = (cap1 + apportTotal) / 1.08;
-
-  // Scénario 2 : Mensualité confort 25%
+  const cap1 = calcCapacite(mensMax1, taux, duree);
+  const budget1 = (cap1 + apportTotal) / 1.08;
   const mensConfort = r.revAvantPAS * 0.25;
-  const cap3        = calcCapacite(mensConfort, taux, duree);
-  const budget3     = (cap3 + apportTotal) / 1.08;
-  const rav3        = r.revTotal - mensConfort - chargesFixes;
-
-  // Scénario 3 : Garder + investir locatif
+  const cap3 = calcCapacite(mensConfort, taux, duree);
+  const budget3 = (cap3 + apportTotal) / 1.08;
+  const rav3 = r.revTotal - mensConfort - chargesFixes;
   const mensMax2 = r.revAvantPAS * 0.35 - mensActuelle;
-  const cap2     = mensMax2 > 0 ? calcCapacite(mensMax2, taux, duree) : 0;
-  const budget2  = (cap2 + apportPerso) / 1.08;
-  const endett2  = mensMax2 > 0 ? ((mensMax2 + mensActuelle) / r.revAvantPAS * 100) : 100;
-
+  const cap2 = mensMax2 > 0 ? calcCapacite(mensMax2, taux, duree) : 0;
+  const budget2 = (cap2 + apportPerso) / 1.08;
+  const endett2 = mensMax2 > 0 ? ((mensMax2 + mensActuelle) / r.revAvantPAS * 100) : 100;
   const scenarios = [
-    {
-      title: 'Vente puis achat',
-      desc: 'Vendre votre maison, puis acheter plus grand',
-      budget: budget1,
-      mensualite: mensMax1,
-      endett: r.revAvantPAS > 0 ? 35 : 0,
-      apport: apportTotal,
-      recommended: true,
-      verdict: '✓ Conforme HCSF',
-    },
-    {
-      title: 'Mensualité confort',
-      desc: 'Endettement à 25% pour plus de sérénité',
-      budget: budget3,
-      mensualite: mensConfort,
-      endett: 25,
-      apport: apportTotal,
-      recommended: false,
-      verdict: `Reste à vivre : ${fmt(rav3)}`,
-    },
-    {
-      title: 'Garder + investir',
-      desc: 'Conserver votre maison et acheter pour louer',
-      budget: budget2,
-      mensualite: mensMax2,
-      endett: endett2,
-      apport: apportPerso,
-      recommended: false,
-      verdict: endett2 <= 35 ? '✓ Possible' : '✗ Endettement trop élevé',
-    },
+    { title: 'Vente puis achat', desc: 'Vendre votre maison, puis acheter plus grand', budget: budget1, mensualite: mensMax1, endett: r.revAvantPAS > 0 ? 35 : 0, apport: apportTotal, recommended: true, verdict: '✓ Conforme HCSF' },
+    { title: 'Mensualité confort', desc: 'Endettement à 25% pour plus de sérénité', budget: budget3, mensualite: mensConfort, endett: 25, apport: apportTotal, recommended: false, verdict: `Reste à vivre : ${fmt(rav3)}` },
+    { title: 'Garder + investir', desc: 'Conserver votre maison et acheter pour louer', budget: budget2, mensualite: mensMax2, endett: endett2, apport: apportPerso, recommended: false, verdict: endett2 <= 35 ? '✓ Possible' : '✗ Endettement trop élevé' },
   ];
-
   return (
     <div style={styles.scenariosGrid}>
       {scenarios.map((s, i) => (
-        <div key={i} style={{
-          ...styles.scenarioCard,
-          border: s.recommended ? '2px solid #22c55e' : '2px solid #e8dcc8',
-        }}>
-          {s.recommended && (
-            <span style={styles.scenarioBadge}>Recommandé</span>
-          )}
+        <div key={i} style={{ ...styles.scenarioCard, border: s.recommended ? '2px solid #22c55e' : '2px solid #e8dcc8' }}>
+          {s.recommended && <span style={styles.scenarioBadge}>Recommandé</span>}
           <h4 style={{ fontWeight: 700, color: '#1a3a5c', marginBottom: 4 }}>{s.title}</h4>
           <p style={{ fontSize: 13, color: '#8a9ab0', marginBottom: 14 }}>{s.desc}</p>
           <p style={{ fontSize: 24, fontWeight: 700, color: '#c9a84c', marginBottom: 10 }}>{fmt(s.budget)}</p>
           <div style={{ fontSize: 13, color: '#5a7a9a' }}>
-            {[
-              ['Mensualité', `${fmt(s.mensualite)}/mois`],
-              ['Endettement', `${s.endett.toFixed(1)}%`],
-              ['Apport', fmt(s.apport)],
-            ].map(([label, val]) => (
-              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-                <span>{label}</span><span style={{ fontWeight: 600 }}>{val}</span>
-              </div>
+            {[['Mensualité', `${fmt(s.mensualite)}/mois`], ['Endettement', `${s.endett.toFixed(1)}%`], ['Apport', fmt(s.apport)]].map(([label, val]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}><span>{label}</span><span style={{ fontWeight: 600 }}>{val}</span></div>
             ))}
-            <div style={{ borderTop: '1px solid #e8dcc8', marginTop: 8, paddingTop: 8, fontWeight: 700, color: '#1a3a5c' }}>
-              {s.verdict}
-            </div>
+            <div style={{ borderTop: '1px solid #e8dcc8', marginTop: 8, paddingTop: 8, fontWeight: 700, color: '#1a3a5c' }}>{s.verdict}</div>
           </div>
         </div>
       ))}
@@ -1180,205 +759,95 @@ function ScenariosGrid({ r, duree, chargesFixes, apportPerso, mensActuelle, crd,
 }
 
 function Card({ title, children }) {
-  return (
-    <div style={styles.card}>
-      {title && <h3 style={styles.cardTitle}>{title}</h3>}
-      {children}
-    </div>
-  );
+  return (<div style={styles.card}>{title && <h3 style={styles.cardTitle}>{title}</h3>}{children}</div>);
 }
 
 function FormField({ label, hint, suffix, children, full }) {
   return (
     <div style={{ gridColumn: full ? '1 / -1' : undefined }}>
       <label style={styles.label}>{label}</label>
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-        {children}
-        {suffix && <span style={styles.suffix}>{suffix}</span>}
-      </div>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>{children}{suffix && <span style={styles.suffix}>{suffix}</span>}</div>
       {hint && <p style={styles.hint}>{hint}</p>}
     </div>
   );
 }
 
 function NumInput({ value, onChange, step = 1 }) {
-  return (
-    <input
-      type="number"
-      value={value}
-      step={step}
-      onChange={e => onChange(+e.target.value)}
-      style={styles.input}
-    />
-  );
+  return (<input type="number" value={value} step={step} onChange={e => onChange(+e.target.value)} style={styles.input}/>);
 }
 
 function ApportRow({ label, value, indent, total, bold, color }) {
   return (
-    <div style={{
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: total ? '10px 0 0' : '5px 0',
-      paddingLeft: indent ? 14 : 0,
-      borderTop: total ? '1px dashed #e8dcc8' : undefined,
-      marginTop: total ? 6 : undefined,
-      fontSize: indent ? 12 : 13,
-      color: indent ? '#8a9ab0' : '#2d4a6d',
-    }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: total ? '10px 0 0' : '5px 0', paddingLeft: indent ? 14 : 0, borderTop: total ? '1px dashed #e8dcc8' : undefined, marginTop: total ? 6 : undefined, fontSize: indent ? 12 : 13, color: indent ? '#8a9ab0' : '#2d4a6d' }}>
       <span style={{ fontWeight: bold || total ? 700 : 400 }}>{label}</span>
-      <span style={{ fontWeight: bold || total ? 700 : 500, color: color || '#1a3a5c' }}>
-        {value}
-      </span>
+      <span style={{ fontWeight: bold || total ? 700 : 500, color: color || '#1a3a5c' }}>{value}</span>
     </div>
   );
 }
 
-
 // ─── COMPOSANT VILLES DVF ────────────────────────────────────────────────────
 
 function VillesDVF({ villes, filterSecurite, setFilterSecurite, filterBudget, setFilterBudget, surfaceMin, fmtFn, styles, FormField, NumInput, Card }) {
-  const [dvfData, setDvfData] = useState({}); // { insee: { prixM2, nb, date, loading, error } }
+  const [dvfData, setDvfData] = useState({});
   const [loaded, setLoaded] = useState(false);
-
   const villesFiltrees = villes.filter(v => v.securite >= filterSecurite);
-
   useEffect(() => {
     if (loaded) return;
     setLoaded(true);
-
-    // Charger les prix DVF pour toutes les communes filtrées en parallèle
     const fetchAll = async () => {
-      // Init loading state
       const init = {};
       villesFiltrees.forEach(v => { init[v.insee] = { loading: true, prixM2: null, nb: 0, date: null, error: false }; });
       setDvfData(init);
-
-      // Fetch en parallèle par batch de 5
       const batchSize = 5;
       for (let i = 0; i < villesFiltrees.length; i += batchSize) {
         const batch = villesFiltrees.slice(i, i + batchSize);
         await Promise.all(batch.map(async (v) => {
           try {
-            const res = await fetch(`/api/dvf?code_commune=${v.insee}`);
+            const res = await fetch(`/api/dvf?mode=stats&commune=${v.insee}`);
             const data = await res.json();
-            setDvfData(prev => ({
-              ...prev,
-              [v.insee]: {
-                loading: false,
-                prixM2: data.prix_m2_median,
-                nb: data.nb_transactions,
-                annee: data.annee,
-                source: data.source,
-                error: !data.prix_m2_median,
-              }
-            }));
+            setDvfData(prev => ({ ...prev, [v.insee]: { loading: false, prixM2: data.prix_m2_median, nb: data.nb_transactions, annee: data.annee, source: data.source, error: !data.prix_m2_median } }));
           } catch {
-            setDvfData(prev => ({
-              ...prev,
-              [v.insee]: { loading: false, prixM2: null, nb: 0, date: null, error: true }
-            }));
+            setDvfData(prev => ({ ...prev, [v.insee]: { loading: false, prixM2: null, nb: 0, date: null, error: true } }));
           }
         }));
       }
     };
-
     fetchAll();
   }, [filterSecurite]);
-
-  // Reset quand le filtre sécurité change
   useEffect(() => { setLoaded(false); }, [filterSecurite]);
-
   return (
     <div>
       <Card title="🎯 Filtres">
         <div style={styles.formGrid}>
-          <FormField label="Budget max" suffix="€">
-            <NumInput value={filterBudget} onChange={setFilterBudget} />
-          </FormField>
-          <FormField label="Sécurité minimum">
-            <select value={filterSecurite} onChange={e => setFilterSecurite(+e.target.value)} style={styles.select}>
-              <option value={3}>3+ étoiles</option>
-              <option value={4}>4+ étoiles</option>
-              <option value={5}>5 étoiles</option>
-            </select>
-          </FormField>
+          <FormField label="Budget max" suffix="€"><NumInput value={filterBudget} onChange={setFilterBudget}/></FormField>
+          <FormField label="Sécurité minimum"><select value={filterSecurite} onChange={e => setFilterSecurite(+e.target.value)} style={styles.select}><option value={3}>3+ étoiles</option><option value={4}>4+ étoiles</option><option value={5}>5 étoiles</option></select></FormField>
         </div>
-        {/* Légende source */}
         <div style={{ marginTop: 12, padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, fontSize: 11, color: '#166534', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span>📊</span>
-          <span><strong>Prix réels DVF</strong> — Transactions maisons 2022-2025 · Source DGFiP / data.gouv.fr · Médiane sur 3 ans</span>
+          <span>📊</span><span><strong>Prix réels DVF</strong> — Transactions maisons 2022-2025 · Source DGFiP / data.gouv.fr · Médiane sur 3 ans</span>
         </div>
       </Card>
-
       <div style={styles.villesGrid}>
         {villesFiltrees.map((v, i) => {
-          const dvf    = dvfData[v.insee];
-          const prixM2 = dvf?.prixM2 || v.prixM2; // Fallback données statiques
-          const prix   = prixM2 * surfaceMin;
+          const dvf = dvfData[v.insee];
+          const prixM2 = dvf?.prixM2 || v.prixM2;
+          const prix = prixM2 * surfaceMin;
           const inBudget = prix <= filterBudget;
           const isLoading = dvf?.loading;
           const isReal = dvf?.prixM2 && !dvf?.error;
-
-          // Variation vs données statiques
           const diff = dvf?.prixM2 ? Math.round(((dvf.prixM2 - v.prixM2) / v.prixM2) * 100) : null;
-
           return (
-            <div key={i} style={{
-              ...styles.villeCard,
-              borderLeft: `3px solid ${inBudget ? '#22c55e' : '#f59e0b'}`,
-              opacity: isLoading ? 0.7 : 1,
-              transition: 'opacity 0.3s',
-            }}>
+            <div key={i} style={{ ...styles.villeCard, borderLeft: `3px solid ${inBudget ? '#22c55e' : '#f59e0b'}`, opacity: isLoading ? 0.7 : 1, transition: 'opacity 0.3s' }}>
               <p style={{ fontWeight: 700, fontSize: 13, color: '#1a3a5c', marginBottom: 4 }}>{v.nom}</p>
-
-              {/* Prix/m² */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                {isLoading ? (
-                  <span style={{ fontSize: 11, color: '#8a9ab0' }}>Chargement DVF…</span>
-                ) : (
-                  <>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: isReal ? '#1a3a5c' : '#8a9ab0' }}>
-                      {prixM2.toLocaleString('fr-FR')} €/m²
-                    </span>
-                    {isReal && (
-                      <span style={{
-                        fontSize: 10, fontWeight: 600, padding: '1px 5px',
-                        borderRadius: 4,
-                        background: '#dcfce7', color: '#166534',
-                      }}>DVF</span>
-                    )}
-                  </>
+                {isLoading ? <span style={{ fontSize: 11, color: '#8a9ab0' }}>Chargement DVF…</span> : (
+                  <><span style={{ fontSize: 13, fontWeight: 700, color: isReal ? '#1a3a5c' : '#8a9ab0' }}>{prixM2.toLocaleString('fr-FR')} €/m²</span>{isReal && <span style={{ fontSize: 10, fontWeight: 600, padding: '1px 5px', borderRadius: 4, background: '#dcfce7', color: '#166534' }}>DVF</span>}</>
                 )}
               </div>
-
-              {/* Variation vs estimation initiale */}
-              {diff !== null && !isLoading && (
-                <p style={{
-                  fontSize: 10, color: diff > 0 ? '#dc2626' : '#16a34a',
-                  marginBottom: 2, fontWeight: 600,
-                }}>
-                  {diff > 0 ? '▲' : '▼'} {Math.abs(diff)}% vs estimation
-                </p>
-              )}
-
-              {/* Prix total */}
-              <p style={{ fontSize: 13, fontWeight: 700, color: inBudget ? '#16a34a' : '#d97706', marginBottom: 4 }}>
-                {fmtFn(prix)}
-              </p>
-
-              {/* Infos complémentaires */}
-              <p style={{ fontSize: 10, color: '#8a9ab0' }}>
-                {'⭐'.repeat(v.securite)} · {v.transport[0]}
-              </p>
-              {dvf?.nb > 0 && !isLoading && (
-                <p style={{ fontSize: 10, color: '#8a9ab0', marginTop: 2 }}>
-                  {dvf.nb} ventes · données {dvf.annee || 2023}
-                </p>
-              )}
-              {dvf?.error && !isLoading && (
-                <p style={{ fontSize: 10, color: '#f59e0b', marginTop: 2 }}>⚠ Données DVF indisponibles</p>
-              )}
+              {diff !== null && !isLoading && <p style={{ fontSize: 10, color: diff > 0 ? '#dc2626' : '#16a34a', marginBottom: 2, fontWeight: 600 }}>{diff > 0 ? '▲' : '▼'} {Math.abs(diff)}% vs estimation</p>}
+              <p style={{ fontSize: 13, fontWeight: 700, color: inBudget ? '#16a34a' : '#d97706', marginBottom: 4 }}>{fmtFn(prix)}</p>
+              <p style={{ fontSize: 10, color: '#8a9ab0' }}>{'⭐'.repeat(v.securite)} · {v.transport[0]}</p>
+              {dvf?.nb > 0 && !isLoading && <p style={{ fontSize: 10, color: '#8a9ab0', marginTop: 2 }}>{dvf.nb} ventes · données {dvf.annee || 2023}</p>}
+              {dvf?.error && !isLoading && <p style={{ fontSize: 10, color: '#f59e0b', marginTop: 2 }}>⚠ Données DVF indisponibles</p>}
             </div>
           );
         })}
@@ -1387,17 +856,14 @@ function VillesDVF({ villes, filterSecurite, setFilterSecurite, filterBudget, se
   );
 }
 
-
-
 // ─── RECHERCHE DVF PAR RUE ───────────────────────────────────────────────────
 
-// Coordonnées de fallback pour la carte initiale (centre Île-de-France)
 const DEFAULT_MAP_CENTER = { lat: 48.8566, lng: 2.3522, zoom: 11 };
 
 function RechercheRueDVF({ styles }) {
   const [communeInput, setCommuneInput] = useState('');
   const [communeSuggestions, setCommuneSuggestions] = useState([]);
-  const [communeSelectee, setCommuneSelectee] = useState(null); // { code, nom, cp }
+  const [communeSelectee, setCommuneSelectee] = useState(null);
   const [rue, setRue]           = useState('');
   const [results, setResults]   = useState(null);
   const [loading, setLoading]   = useState(false);
@@ -1407,15 +873,21 @@ function RechercheRueDVF({ styles }) {
   const [viewMode, setViewMode] = useState('split');
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  const leafletMap      = useRef(null);
-  const markersLayer    = useRef(null);
-  const mapContainer    = useRef(null);
-  const communeRef      = useRef(null); // toujours synchronisé avec communeSelectee
-  const suggestTimer    = useRef(null);
+  const leafletMap   = useRef(null);
+  const markersLayer = useRef(null);
+  const mapContainer = useRef(null);
+  const communeRef   = useRef(null);
+  const suggestTimer = useRef(null);
 
   useEffect(() => { communeRef.current = communeSelectee; }, [communeSelectee]);
 
-  // Autocomplétion commune via geo.api.gouv.fr
+  // ── FIX : invalidateSize quand la carte redevient visible ──
+  useEffect(() => {
+    if (viewMode !== 'table' && leafletMap.current) {
+      setTimeout(() => leafletMap.current.invalidateSize(), 50);
+    }
+  }, [viewMode]);
+
   const rechercherCommunes = (val) => {
     setCommuneInput(val);
     setCommuneSelectee(null);
@@ -1424,9 +896,7 @@ function RechercheRueDVF({ styles }) {
     suggestTimer.current = setTimeout(async () => {
       setLoadingSuggestions(true);
       try {
-        const res = await fetch(
-          `https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(val)}&fields=code,nom,codesPostaux,departement&limit=8&boost=population`
-        );
+        const res = await fetch(`https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(val)}&fields=code,nom,codesPostaux,departement&limit=8&boost=population`);
         const data = await res.json();
         setCommuneSuggestions(data || []);
         setShowSuggestions(true);
@@ -1440,20 +910,14 @@ function RechercheRueDVF({ styles }) {
     setCommuneInput(`${commune.nom} (${commune.departement?.nom || commune.codesPostaux?.[0] || ''})`);
     setCommuneSuggestions([]);
     setShowSuggestions(false);
-    // Recentrer la carte sur la commune via Nominatim
     if (leafletMap.current) {
-      fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(commune.nom)}&countrycodes=fr&limit=1&format=json`,
-        { headers: { 'User-Agent': 'BudgetFamilialTchamfong/1.0' } })
+      fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(commune.nom)}&countrycodes=fr&limit=1&format=json`, { headers: { 'User-Agent': 'BudgetFamilialTchamfong/1.0' } })
         .then(r => r.json())
-        .then(data => {
-          if (data[0]) {
-            leafletMap.current.setView([parseFloat(data[0].lat), parseFloat(data[0].lon)], 14);
-          }
-        }).catch(() => {});
+        .then(data => { if (data[0]) leafletMap.current.setView([parseFloat(data[0].lat), parseFloat(data[0].lon)], 14); })
+        .catch(() => {});
     }
   };
 
-  // Charger Leaflet dynamiquement
   useEffect(() => {
     if (window.L) { setMapReady(true); return; }
     const link = document.createElement('link');
@@ -1466,42 +930,25 @@ function RechercheRueDVF({ styles }) {
     document.head.appendChild(script);
   }, []);
 
-  // Initialiser la carte (une seule fois)
   useEffect(() => {
     if (!mapReady || !mapContainer.current || leafletMap.current) return;
-    const map = window.L.map(mapContainer.current, { zoomControl: true })
-      .setView([DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng], DEFAULT_MAP_CENTER.zoom);
-    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 19,
-    }).addTo(map);
+    const map = window.L.map(mapContainer.current, { zoomControl: true }).setView([DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng], DEFAULT_MAP_CENTER.zoom);
+    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19 }).addTo(map);
     markersLayer.current = window.L.layerGroup().addTo(map);
 
-    // Clic sur la carte → géocode via Nominatim, détecte commune + rue
     map.on('click', async (e) => {
       const { lat, lng } = e.latlng;
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=fr`,
-          { headers: { 'User-Agent': 'BudgetFamilialTchamfong/1.0' } }
-        );
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=fr`, { headers: { 'User-Agent': 'BudgetFamilialTchamfong/1.0' } });
         const data = await res.json();
         const road = data.address?.road || data.address?.pedestrian || data.address?.street;
         if (!road) return;
-
-        const nomRue = road
-          .replace(/^(rue|avenue|av\.?|boulevard|bd\.?|impasse|allée|all\.?|chemin|place|pl\.?|villa|clos|résidence|rés\.?|res\.?|square|sq\.?|passage|voie)\s+/i, '')
-          .toUpperCase();
-
-        // Détecter la commune depuis Nominatim → chercher le code INSEE via geo.api
+        const nomRue = road.replace(/^(rue|avenue|av\.?|boulevard|bd\.?|impasse|allée|all\.?|chemin|place|pl\.?|villa|clos|résidence|rés\.?|res\.?|square|sq\.?|passage|voie)\s+/i, '').toUpperCase();
         const villeNom = data.address?.city || data.address?.town || data.address?.village || data.address?.municipality || '';
-        const cp       = data.address?.postcode || '';
-
+        const cp = data.address?.postcode || '';
         if (villeNom) {
           try {
-            const geoRes = await fetch(
-              `https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(villeNom)}&codePostal=${cp}&fields=code,nom,codesPostaux,departement&limit=1`
-            );
+            const geoRes = await fetch(`https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(villeNom)}&codePostal=${cp}&fields=code,nom,codesPostaux,departement&limit=1`);
             const geoData = await geoRes.json();
             if (geoData[0]) {
               const c = geoData[0];
@@ -1514,8 +961,6 @@ function RechercheRueDVF({ styles }) {
             }
           } catch {}
         }
-
-        // Fallback : utiliser commune déjà sélectionnée si dispo
         setRue(nomRue);
         if (communeRef.current) await lancerRecherche(nomRue, communeRef.current);
       } catch (err) { console.error('Nominatim error:', err); }
@@ -1525,30 +970,14 @@ function RechercheRueDVF({ styles }) {
     setTimeout(() => map.invalidateSize(), 100);
   }, [mapReady]);
 
-  // Afficher les marqueurs quand les résultats changent
   useEffect(() => {
     if (!leafletMap.current || !markersLayer.current || !results) return;
     markersLayer.current.clearLayers();
     results.transactions.forEach(t => {
       if (!t.lat || !t.lng) return;
-      const icon = window.L.divIcon({
-        className: '',
-        html: `<div style="background:#c9a84c;color:#fff;padding:3px 7px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${Math.round(t.prix / 1000)}k</div>`,
-        iconAnchor: [20, 10],
-      });
+      const icon = window.L.divIcon({ className: '', html: `<div style="background:#c9a84c;color:#fff;padding:3px 7px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3)">${Math.round(t.prix / 1000)}k</div>`, iconAnchor: [20, 10] });
       const marker = window.L.marker([t.lat, t.lng], { icon });
-      marker.bindPopup(`
-        <div style="font-family:DM Sans,sans-serif;min-width:180px">
-          <div style="font-weight:700;font-size:14px;color:#1a3a5c;margin-bottom:4px">${t.adresse}</div>
-          <div style="font-size:16px;font-weight:800;color:#c9a84c">${t.prix.toLocaleString('fr-FR')} €</div>
-          <div style="font-size:12px;color:#5a7a9a;margin-top:2px">
-            ${t.surface ? t.surface + ' m²' : ''}${t.prixM2 ? ' · ' + t.prixM2.toLocaleString('fr-FR') + ' €/m²' : ''}
-          </div>
-          <div style="font-size:11px;color:#8a9ab0;margin-top:4px">
-            ${t.pieces ? t.pieces + ' pièces · ' : ''}${new Date(t.date).toLocaleDateString('fr-FR')}
-          </div>
-        </div>
-      `);
+      marker.bindPopup(`<div style="font-family:DM Sans,sans-serif;min-width:180px"><div style="font-weight:700;font-size:14px;color:#1a3a5c;margin-bottom:4px">${t.adresse}</div><div style="font-size:16px;font-weight:800;color:#c9a84c">${t.prix.toLocaleString('fr-FR')} €</div><div style="font-size:12px;color:#5a7a9a;margin-top:2px">${t.surface ? t.surface + ' m²' : ''}${t.prixM2 ? ' · ' + t.prixM2.toLocaleString('fr-FR') + ' €/m²' : ''}</div><div style="font-size:11px;color:#8a9ab0;margin-top:4px">${t.pieces ? t.pieces + ' pièces · ' : ''}${new Date(t.date).toLocaleDateString('fr-FR')}</div></div>`);
       markersLayer.current.addLayer(marker);
     });
     if (results.transactions.filter(t => t.lat).length > 0) {
@@ -1558,7 +987,7 @@ function RechercheRueDVF({ styles }) {
   }, [results]);
 
   const lancerRecherche = async (nomRue, commune) => {
-    const r = nomRue  !== undefined ? nomRue  : rue;
+    const r = nomRue !== undefined ? nomRue : rue;
     const c = commune !== undefined ? commune : communeRef.current;
     if (!r.trim() || !c) return;
     setLoading(true); setError(null); setResults(null);
@@ -1584,200 +1013,79 @@ function RechercheRueDVF({ styles }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-      {/* Barre de contrôle */}
       <div style={{ background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 16, padding: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>
-            🗺️ Recherche DVF par rue — France entière · cliquez sur la carte ou saisissez
-          </h3>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>🗺️ Recherche DVF par rue — France entière · cliquez sur la carte ou saisissez</h3>
           <div style={{ display: 'flex', background: '#f0ead8', borderRadius: 8, padding: 3, gap: 2 }}>
             {[['split', '⬛⬛ Mixte'], ['map', '🗺️ Carte'], ['table', '📋 Tableau']].map(([v, l]) => (
-              <button key={v} onClick={() => setViewMode(v)} style={{
-                padding: '5px 10px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11,
-                fontWeight: viewMode === v ? 700 : 400,
-                background: viewMode === v ? '#fff' : 'transparent',
-                color: viewMode === v ? '#c9a84c' : '#8a9ab0',
-              }}>{l}</button>
+              <button key={v} onClick={() => setViewMode(v)} style={{ padding: '5px 10px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: viewMode === v ? 700 : 400, background: viewMode === v ? '#fff' : 'transparent', color: viewMode === v ? '#c9a84c' : '#8a9ab0' }}>{l}</button>
             ))}
           </div>
         </div>
-
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
-          {/* Champ commune libre avec autocomplétion */}
           <div style={{ position: 'relative' }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: '#5a7a9a', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>
               Commune {loadingSuggestions && <span style={{ color: '#c9a84c' }}>⏳</span>}
               {communeSelectee && <span style={{ color: '#16a34a', marginLeft: 4 }}>✓</span>}
             </label>
-            <input
-              type="text"
-              value={communeInput}
-              onChange={e => rechercherCommunes(e.target.value)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-              onFocus={() => communeSuggestions.length > 0 && setShowSuggestions(true)}
-              placeholder="Fontenay-sous-Bois, Lyon, Bordeaux…"
-              style={{ ...styles.input, width: '100%', paddingRight: 12,
-                borderColor: communeSelectee ? '#16a34a' : undefined }}
-            />
+            <input type="text" value={communeInput} onChange={e => rechercherCommunes(e.target.value)} onBlur={() => setTimeout(() => setShowSuggestions(false), 150)} onFocus={() => communeSuggestions.length > 0 && setShowSuggestions(true)} placeholder="Fontenay-sous-Bois, Lyon, Bordeaux…" style={{ ...styles.input, width: '100%', paddingRight: 12, borderColor: communeSelectee ? '#16a34a' : undefined }}/>
             {showSuggestions && communeSuggestions.length > 0 && (
-              <div style={{
-                position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000,
-                background: '#fff', border: '1px solid #e8dcc8', borderRadius: 10,
-                boxShadow: '0 8px 24px rgba(0,0,0,0.12)', marginTop: 4, overflow: 'hidden',
-              }}>
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000, background: '#fff', border: '1px solid #e8dcc8', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', marginTop: 4, overflow: 'hidden' }}>
                 {communeSuggestions.map((c, i) => (
-                  <div
-                    key={c.code}
-                    onMouseDown={() => choisirCommune(c)}
-                    style={{
-                      padding: '10px 14px', cursor: 'pointer', fontSize: 13,
-                      borderBottom: i < communeSuggestions.length - 1 ? '1px solid #f0ead8' : 'none',
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#fef9f0'}
-                    onMouseLeave={e => e.currentTarget.style.background = '#fff'}
-                  >
+                  <div key={c.code} onMouseDown={() => choisirCommune(c)} style={{ padding: '10px 14px', cursor: 'pointer', fontSize: 13, borderBottom: i < communeSuggestions.length - 1 ? '1px solid #f0ead8' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} onMouseEnter={e => e.currentTarget.style.background = '#fef9f0'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                     <span style={{ fontWeight: 600, color: '#1a3a5c' }}>{c.nom}</span>
-                    <span style={{ fontSize: 11, color: '#8a9ab0' }}>
-                      {c.departement?.nom || ''} · {c.codesPostaux?.[0] || c.code}
-                    </span>
+                    <span style={{ fontSize: 11, color: '#8a9ab0' }}>{c.departement?.nom || ''} · {c.codesPostaux?.[0] || c.code}</span>
                   </div>
                 ))}
               </div>
             )}
           </div>
-
-          {/* Champ rue */}
           <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: '#5a7a9a', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>
-              Nom de rue <span style={{ color: '#c4b898', fontWeight: 400 }}>(ou cliquez sur la carte)</span>
-            </label>
-            <input
-              type="text" value={rue}
-              onChange={e => setRue(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && lancerRecherche()}
-              placeholder="ex: BEAUMONTS, GAMBETTA…"
-              style={{ ...styles.input, width: '100%', paddingRight: 12 }}
-            />
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#5a7a9a', display: 'block', marginBottom: 4, textTransform: 'uppercase' }}>Nom de rue <span style={{ color: '#c4b898', fontWeight: 400 }}>(ou cliquez sur la carte)</span></label>
+            <input type="text" value={rue} onChange={e => setRue(e.target.value)} onKeyDown={e => e.key === 'Enter' && lancerRecherche()} placeholder="ex: BEAUMONTS, GAMBETTA…" style={{ ...styles.input, width: '100%', paddingRight: 12 }}/>
           </div>
-
-          <button
-            onClick={() => lancerRecherche()}
-            disabled={loading || !rue.trim() || !communeSelectee}
-            title={!communeSelectee ? 'Sélectionnez une commune' : ''}
-            style={{
-              padding: '10px 20px',
-              background: loading ? '#8a9ab0' : !communeSelectee ? '#d4c5a0' : '#c9a84c',
-              color: '#fff', border: 'none', borderRadius: 8,
-              cursor: loading || !communeSelectee ? 'not-allowed' : 'pointer',
-              fontWeight: 700, fontSize: 13,
-            }}>
+          <button onClick={() => lancerRecherche()} disabled={loading || !rue.trim() || !communeSelectee} title={!communeSelectee ? 'Sélectionnez une commune' : ''} style={{ padding: '10px 20px', background: loading ? '#8a9ab0' : !communeSelectee ? '#d4c5a0' : '#c9a84c', color: '#fff', border: 'none', borderRadius: 8, cursor: loading || !communeSelectee ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 13 }}>
             {loading ? '⏳' : '🔍 Chercher'}
           </button>
         </div>
-
-        <p style={{ fontSize: 11, color: '#8a9ab0', marginTop: 8 }}>
-          Source : data.gouv.fr — DVF DGFiP · Maisons uniquement · 2020 → juin 2025 · 200 ventes les plus récentes
-        </p>
+        <p style={{ fontSize: 11, color: '#8a9ab0', marginTop: 8 }}>Source : data.gouv.fr — DVF DGFiP · Maisons uniquement · 2020 → juin 2025 · 200 ventes les plus récentes</p>
       </div>
 
-      {error && (
-        <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#991b1b' }}>
-          ⚠ {error}
-        </div>
-      )}
+      {error && <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#991b1b' }}>⚠ {error}</div>}
 
-      {/* Layout carte + tableau */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: viewMode === 'map' ? '1fr' : viewMode === 'table' ? '1fr' : '1fr 1fr',
-        gap: 16,
-      }}>
-        {/* Carte */}
+      <div style={{ display: 'grid', gridTemplateColumns: viewMode === 'map' ? '1fr' : viewMode === 'table' ? '1fr' : '1fr 1fr', gap: 16 }}>
         {viewMode !== 'table' && (
           <div style={{ background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 16, overflow: 'hidden', height: 520, position: 'relative' }}>
-            {!mapReady && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0ead8', zIndex: 10 }}>
-                <span style={{ color: '#8a9ab0', fontSize: 13 }}>Chargement de la carte…</span>
-              </div>
-            )}
-            <div ref={mapContainer} style={{ width: '100%', height: '100%' }} />
-            {!results && mapReady && (
-              <div style={{
-                position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
-                background: 'rgba(26,58,92,0.85)', color: '#fff', padding: '8px 16px',
-                borderRadius: 20, fontSize: 12, fontWeight: 500, zIndex: 500, whiteSpace: 'nowrap',
-              }}>
-                👆 Cliquez sur une rue pour voir les ventes de maisons
-              </div>
-            )}
-            {loading && (
-              <div style={{
-                position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
-                background: '#c9a84c', color: '#fff', padding: '6px 14px',
-                borderRadius: 20, fontSize: 12, fontWeight: 600, zIndex: 500,
-              }}>
-                Recherche en cours…
-              </div>
-            )}
+            {!mapReady && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0ead8', zIndex: 10 }}><span style={{ color: '#8a9ab0', fontSize: 13 }}>Chargement de la carte…</span></div>}
+            <div ref={mapContainer} style={{ width: '100%', height: '100%' }}/>
+            {!results && mapReady && <div style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', background: 'rgba(26,58,92,0.85)', color: '#fff', padding: '8px 16px', borderRadius: 20, fontSize: 12, fontWeight: 500, zIndex: 500, whiteSpace: 'nowrap' }}>👆 Cliquez sur une rue pour voir les ventes de maisons</div>}
+            {loading && <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', background: '#c9a84c', color: '#fff', padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, zIndex: 500 }}>Recherche en cours…</div>}
           </div>
         )}
-
-        {/* Tableau */}
         {viewMode !== 'map' && (
           <div style={{ background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #e8dcc8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               {results ? (
                 <>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>{results.rue} — {results.commune}</div>
-                    <div style={{ fontSize: 11, color: '#8a9ab0', marginTop: 2 }}>
-                      {results.nb} vente{results.nb > 1 ? 's' : ''} de maison{results.nb > 1 ? 's' : ''}
-                      {results.nb === 200 && <span style={{ color: '#c9a84c', marginLeft: 4 }}>· 200 plus récentes</span>}
-                    </div>
-                  </div>
-                  {mediane && (
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 10, color: '#8a9ab0', textTransform: 'uppercase', fontWeight: 600 }}>Prix médian</div>
-                      <div style={{ fontSize: 20, fontWeight: 700, color: '#c9a84c' }}>{fmtM2Local(mediane)}</div>
-                    </div>
-                  )}
+                  <div><div style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>{results.rue} — {results.commune}</div><div style={{ fontSize: 11, color: '#8a9ab0', marginTop: 2 }}>{results.nb} vente{results.nb > 1 ? 's' : ''} de maison{results.nb > 1 ? 's' : ''}{results.nb === 200 && <span style={{ color: '#c9a84c', marginLeft: 4 }}>· 200 plus récentes</span>}</div></div>
+                  {mediane && <div style={{ textAlign: 'right' }}><div style={{ fontSize: 10, color: '#8a9ab0', textTransform: 'uppercase', fontWeight: 600 }}>Prix médian</div><div style={{ fontSize: 20, fontWeight: 700, color: '#c9a84c' }}>{fmtM2Local(mediane)}</div></div>}
                 </>
               ) : (
-                <div style={{ color: '#8a9ab0', fontSize: 13 }}>
-                  {loading ? 'Chargement…' : 'Sélectionnez une commune et cherchez une rue'}
-                </div>
+                <div style={{ color: '#8a9ab0', fontSize: 13 }}>{loading ? 'Chargement…' : 'Sélectionnez une commune et cherchez une rue'}</div>
               )}
             </div>
             <div style={{ flex: 1, overflowY: 'auto', maxHeight: 456 }}>
-              {results?.nb === 0 && (
-                <div style={{ textAlign: 'center', padding: '32px 16px', color: '#8a9ab0', fontSize: 13 }}>
-                  Aucune vente de maison trouvée.<br />
-                  <span style={{ fontSize: 11 }}>Essayez avec un nom partiel</span>
-                </div>
-              )}
+              {results?.nb === 0 && <div style={{ textAlign: 'center', padding: '32px 16px', color: '#8a9ab0', fontSize: 13 }}>Aucune vente de maison trouvée.<br/><span style={{ fontSize: 11 }}>Essayez avec un nom partiel</span></div>}
               {results?.transactions?.map((t, i) => (
-                <div key={i}
-                  onClick={() => { if (t.lat && leafletMap.current) { leafletMap.current.setView([t.lat, t.lng], 17); setViewMode('split'); }}}
-                  style={{ padding: '12px 20px', borderBottom: '1px solid #f0ead8', cursor: t.lat ? 'pointer' : 'default', background: i % 2 === 0 ? 'transparent' : '#faf7f2' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#fef9f0'}
-                  onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : '#faf7f2'}
-                >
+                <div key={i} onClick={() => { if (t.lat && leafletMap.current) { leafletMap.current.setView([t.lat, t.lng], 17); setViewMode('split'); }}} style={{ padding: '12px 20px', borderBottom: '1px solid #f0ead8', cursor: t.lat ? 'pointer' : 'default', background: i % 2 === 0 ? 'transparent' : '#faf7f2' }} onMouseEnter={e => e.currentTarget.style.background = '#fef9f0'} onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : '#faf7f2'}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#1a3a5c' }}>{t.adresse}</div>
-                      <div style={{ fontSize: 11, color: '#8a9ab0', marginTop: 2 }}>
-                        {new Date(t.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        {t.pieces ? ` · ${t.pieces} pièces` : ''}
-                        {t.terrain ? ` · terrain ${t.terrain} m²` : ''}
-                      </div>
+                      <div style={{ fontSize: 11, color: '#8a9ab0', marginTop: 2 }}>{new Date(t.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}{t.pieces ? ` · ${t.pieces} pièces` : ''}{t.terrain ? ` · terrain ${t.terrain} m²` : ''}</div>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
                       <div style={{ fontSize: 15, fontWeight: 700, color: '#1a3a5c' }}>{fmtLocal(t.prix)}</div>
-                      <div style={{ fontSize: 11, color: '#c9a84c', fontWeight: 600 }}>
-                        {t.surface ? t.surface + ' m² · ' : ''}{fmtM2Local(t.prixM2)}
-                      </div>
+                      <div style={{ fontSize: 11, color: '#c9a84c', fontWeight: 600 }}>{t.surface ? t.surface + ' m² · ' : ''}{fmtM2Local(t.prixM2)}</div>
                     </div>
                   </div>
                   {t.lat && <div style={{ fontSize: 10, color: '#c4b898', marginTop: 4 }}>📍 Cliquer pour localiser</div>}
@@ -1791,403 +1099,65 @@ function RechercheRueDVF({ styles }) {
   );
 }
 
-
 // ─── STYLES ─────────────────────────────────────────────────────────────────
 
 const styles = {
-  root: {
-    fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-    color: '#1a3a5c',
-  },
-  headerBadges: {
-    display: 'flex',
-    gap: 8,
-    flexWrap: 'wrap',
-    marginBottom: 20,
-  },
-  badge: (bg, color) => ({
-    padding: '5px 12px',
-    borderRadius: 99,
-    fontSize: 12,
-    fontWeight: 600,
-    background: bg,
-    color,
-  }),
-  tabs: {
-    display: 'flex',
-    gap: 4,
-    borderBottom: '1px solid #e8dcc8',
-    marginBottom: 24,
-    overflowX: 'auto',
-  },
-  tab: {
-    padding: '10px 18px',
-    fontSize: 14,
-    fontWeight: 500,
-    color: '#8a9ab0',
-    background: 'none',
-    border: 'none',
-    borderBottom: '2px solid transparent',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-  },
-  tabActive: {
-    padding: '10px 18px',
-    fontSize: 14,
-    fontWeight: 600,
-    color: '#c9a84c',
-    background: 'none',
-    border: 'none',
-    borderBottom: '2px solid #c9a84c',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-  },
-  simGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 380px',
-    gap: 24,
-  },
-  card: {
-    background: '#fffdf8',
-    border: '1px solid #e8dcc8',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: 700,
-    color: '#1a3a5c',
-    marginBottom: 14,
-  },
-  formGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: 14,
-  },
-  label: {
-    display: 'block',
-    fontSize: 12,
-    fontWeight: 500,
-    color: '#5a7a9a',
-    marginBottom: 4,
-  },
-  input: {
-    width: '100%',
-    padding: '9px 42px 9px 12px',
-    border: '1px solid #e8dcc8',
-    borderRadius: 8,
-    fontSize: 14,
-    color: '#1a3a5c',
-    background: '#fffdf8',
-    outline: 'none',
-  },
-  select: {
-    width: '100%',
-    padding: '9px 12px',
-    border: '1px solid #e8dcc8',
-    borderRadius: 8,
-    fontSize: 14,
-    color: '#1a3a5c',
-    background: '#fffdf8',
-    outline: 'none',
-  },
-  suffix: {
-    position: 'absolute',
-    right: 10,
-    fontSize: 12,
-    color: '#c9a84c',
-    pointerEvents: 'none',
-  },
-  hint: {
-    fontSize: 11,
-    color: '#8a9ab0',
-    marginTop: 3,
-  },
-  modeToggle: {
-    display: 'flex',
-    background: '#f0ead8',
-    borderRadius: 8,
-    padding: 4,
-    gap: 4,
-    marginBottom: 10,
-  },
-  modeBtn: {
-    padding: '6px 12px',
-    border: 'none',
-    background: 'transparent',
-    fontSize: 12,
-    fontWeight: 500,
-    color: '#8a9ab0',
-    borderRadius: 6,
-    cursor: 'pointer',
-  },
-  modeBtnActive: {
-    padding: '6px 12px',
-    border: 'none',
-    background: '#fff',
-    fontSize: 12,
-    fontWeight: 600,
-    color: '#c9a84c',
-    borderRadius: 6,
-    cursor: 'pointer',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-  },
-  sliderBox: {
-    background: '#fef9f0',
-    border: '1px solid #f0d9a0',
-    borderRadius: 10,
-    padding: 14,
-    marginTop: 4,
-  },
-  sliderHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  slider: {
-    width: '100%',
-    accentColor: '#c9a84c',
-  },
-  sliderLabels: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: 11,
-    color: '#c9a84c',
-    marginTop: 6,
-  },
-  toggleRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
-  },
-  toggle: {
-    width: 46,
-    height: 24,
-    borderRadius: 12,
-    position: 'relative',
-    flexShrink: 0,
-    transition: 'background 0.2s',
-  },
-  toggleDot: {
-    position: 'absolute',
-    top: 3,
-    left: 3,
-    width: 18,
-    height: 18,
-    borderRadius: '50%',
-    background: '#fff',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-    transition: 'transform 0.2s',
-  },
-  // Budget hero
-  budgetHero: {
-    background: 'linear-gradient(135deg, #1a3a5c 0%, #2d5986 100%)',
-    borderRadius: 16,
-    padding: 22,
-    color: '#fff',
-    marginBottom: 16,
-  },
-  budgetHeroGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1px 1fr',
-    gap: 16,
-    alignItems: 'center',
-  },
-  budgetLabel: {
-    fontSize: 11,
-    opacity: 0.75,
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-    marginBottom: 4,
-  },
-  budgetValueLarge: {
-    fontSize: 28,
-    fontWeight: 700,
-    color: '#d4af37',
-  },
-  budgetNote: {
-    fontSize: 11,
-    opacity: 0.6,
-    marginTop: 2,
-  },
-  soldeVenteRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    background: '#f0fdf4',
-    margin: '6px -6px',
-    padding: '8px 6px',
-    borderRadius: 6,
-  },
-  progressBar: {
-    height: 10,
-    background: '#e8dcc8',
-    borderRadius: 5,
-    overflow: 'visible',
-    position: 'relative',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 5,
-    transition: 'width 0.3s, background 0.3s',
-  },
-  progressMarker: {
-    position: 'absolute',
-    top: -4,
-    width: 2,
-    height: 18,
-    background: '#ef4444',
-  },
-  progressLabels: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: 11,
-    color: '#8a9ab0',
-    marginTop: 5,
-  },
-  statusBadge: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '8px 14px',
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 600,
-  },
-  // Annonces
-  annoncesHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  infoBox: {
-    background: '#fef9f0',
-    border: '1px solid #f0d9a0',
-    borderRadius: 10,
-    padding: '12px 16px',
-    fontSize: 13,
-    color: '#92400e',
-    display: 'flex',
-    gap: 10,
-    marginBottom: 20,
-  },
-  linkBtn: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 4,
-    padding: '7px 12px',
-    background: '#fffdf8',
-    border: '1px solid #e8dcc8',
-    borderRadius: 8,
-    fontSize: 12,
-    fontWeight: 500,
-    color: '#2d4a6d',
-    textDecoration: 'none',
-  },
-  annoncesGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-    gap: 14,
-  },
-  annonceCard: {
-    background: '#fffdf8',
-    border: '1px solid #e8dcc8',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  annonceImg: {
-    height: 120,
-    background: 'linear-gradient(135deg, #f0ead8, #e8dcc8)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 36,
-    position: 'relative',
-  },
-  annonceBadge: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    padding: '3px 8px',
-    borderRadius: 6,
-    fontSize: 11,
-    fontWeight: 600,
-    color: '#fff',
-  },
-  annonceBody: {
-    padding: '12px 14px 14px',
-  },
-  annonceSpecs: {
-    display: 'flex',
-    gap: 12,
-    fontSize: 12,
-    color: '#5a7a9a',
-    borderTop: '1px solid #f0ead8',
-    paddingTop: 10,
-    marginBottom: 10,
-  },
-  annonceStatus: {
-    padding: '6px 10px',
-    borderRadius: 6,
-    fontSize: 12,
-    fontWeight: 500,
-  },
-  // Scénarios
-  scenariosGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-    gap: 16,
-  },
-  scenarioCard: {
-    background: '#fffdf8',
-    borderRadius: 14,
-    padding: 20,
-    position: 'relative',
-  },
-  scenarioBadge: {
-    position: 'absolute',
-    top: -10,
-    left: 14,
-    padding: '3px 10px',
-    background: '#22c55e',
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: 600,
-    borderRadius: 4,
-  },
-  // Villes
-  villesGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-    gap: 10,
-  },
-  villeCard: {
-    background: '#fffdf8',
-    border: '1px solid #e8dcc8',
-    borderRadius: 10,
-    padding: 12,
-  },
-  footer: {
-    textAlign: 'center',
-    marginTop: 32,
-    paddingTop: 20,
-    borderTop: '1px solid #e8dcc8',
-    fontSize: 12,
-    color: '#8a9ab0',
-  },
+  root: { fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif", color: '#1a3a5c' },
+  headerBadges: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 },
+  badge: (bg, color) => ({ padding: '5px 12px', borderRadius: 99, fontSize: 12, fontWeight: 600, background: bg, color }),
+  tabs: { display: 'flex', gap: 4, borderBottom: '1px solid #e8dcc8', marginBottom: 24, overflowX: 'auto' },
+  tab: { padding: '10px 18px', fontSize: 14, fontWeight: 500, color: '#8a9ab0', background: 'none', border: 'none', borderBottom: '2px solid transparent', cursor: 'pointer', whiteSpace: 'nowrap' },
+  tabActive: { padding: '10px 18px', fontSize: 14, fontWeight: 600, color: '#c9a84c', background: 'none', border: 'none', borderBottom: '2px solid #c9a84c', cursor: 'pointer', whiteSpace: 'nowrap' },
+  simGrid: { display: 'grid', gridTemplateColumns: '1fr 380px', gap: 24 },
+  card: { background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 16, padding: 20, marginBottom: 16 },
+  cardTitle: { fontSize: 14, fontWeight: 700, color: '#1a3a5c', marginBottom: 14 },
+  formGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 },
+  label: { display: 'block', fontSize: 12, fontWeight: 500, color: '#5a7a9a', marginBottom: 4 },
+  input: { width: '100%', padding: '9px 42px 9px 12px', border: '1px solid #e8dcc8', borderRadius: 8, fontSize: 14, color: '#1a3a5c', background: '#fffdf8', outline: 'none' },
+  select: { width: '100%', padding: '9px 12px', border: '1px solid #e8dcc8', borderRadius: 8, fontSize: 14, color: '#1a3a5c', background: '#fffdf8', outline: 'none' },
+  suffix: { position: 'absolute', right: 10, fontSize: 12, color: '#c9a84c', pointerEvents: 'none' },
+  hint: { fontSize: 11, color: '#8a9ab0', marginTop: 3 },
+  modeToggle: { display: 'flex', background: '#f0ead8', borderRadius: 8, padding: 4, gap: 4, marginBottom: 10 },
+  modeBtn: { padding: '6px 12px', border: 'none', background: 'transparent', fontSize: 12, fontWeight: 500, color: '#8a9ab0', borderRadius: 6, cursor: 'pointer' },
+  modeBtnActive: { padding: '6px 12px', border: 'none', background: '#fff', fontSize: 12, fontWeight: 600, color: '#c9a84c', borderRadius: 6, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' },
+  sliderBox: { background: '#fef9f0', border: '1px solid #f0d9a0', borderRadius: 10, padding: 14, marginTop: 4 },
+  sliderHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  slider: { width: '100%', accentColor: '#c9a84c' },
+  sliderLabels: { display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#c9a84c', marginTop: 6 },
+  toggleRow: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 },
+  toggle: { width: 46, height: 24, borderRadius: 12, position: 'relative', flexShrink: 0, transition: 'background 0.2s' },
+  toggleDot: { position: 'absolute', top: 3, left: 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transition: 'transform 0.2s' },
+  budgetHero: { background: 'linear-gradient(135deg, #1a3a5c 0%, #2d5986 100%)', borderRadius: 16, padding: 22, color: '#fff', marginBottom: 16 },
+  budgetHeroGrid: { display: 'grid', gridTemplateColumns: '1fr 1px 1fr', gap: 16, alignItems: 'center' },
+  budgetLabel: { fontSize: 11, opacity: 0.75, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 },
+  budgetValueLarge: { fontSize: 28, fontWeight: 700, color: '#d4af37' },
+  budgetNote: { fontSize: 11, opacity: 0.6, marginTop: 2 },
+  soldeVenteRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f0fdf4', margin: '6px -6px', padding: '8px 6px', borderRadius: 6 },
+  progressBar: { height: 10, background: '#e8dcc8', borderRadius: 5, overflow: 'visible', position: 'relative' },
+  progressFill: { height: '100%', borderRadius: 5, transition: 'width 0.3s, background 0.3s' },
+  progressMarker: { position: 'absolute', top: -4, width: 2, height: 18, background: '#ef4444' },
+  progressLabels: { display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#8a9ab0', marginTop: 5 },
+  statusBadge: { display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600 },
+  annoncesHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 },
+  infoBox: { background: '#fef9f0', border: '1px solid #f0d9a0', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: '#92400e', display: 'flex', gap: 10, marginBottom: 20 },
+  linkBtn: { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '7px 12px', background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 8, fontSize: 12, fontWeight: 500, color: '#2d4a6d', textDecoration: 'none' },
+  annoncesGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 },
+  annonceCard: { background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 12, overflow: 'hidden' },
+  annonceImg: { height: 120, background: 'linear-gradient(135deg, #f0ead8, #e8dcc8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, position: 'relative' },
+  annonceBadge: { position: 'absolute', top: 10, left: 10, padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, color: '#fff' },
+  annonceBody: { padding: '12px 14px 14px' },
+  annonceSpecs: { display: 'flex', gap: 12, fontSize: 12, color: '#5a7a9a', borderTop: '1px solid #f0ead8', paddingTop: 10, marginBottom: 10 },
+  annonceStatus: { padding: '6px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500 },
+  scenariosGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 },
+  scenarioCard: { background: '#fffdf8', borderRadius: 14, padding: 20, position: 'relative' },
+  scenarioBadge: { position: 'absolute', top: -10, left: 14, padding: '3px 10px', background: '#22c55e', color: '#fff', fontSize: 11, fontWeight: 600, borderRadius: 4 },
+  villesGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 },
+  villeCard: { background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 10, padding: 12 },
+  footer: { textAlign: 'center', marginTop: 32, paddingTop: 20, borderTop: '1px solid #e8dcc8', fontSize: 12, color: '#8a9ab0' },
 };
 
 // === ROW COMPONENTS ===
 function EditRow({label,a:initA,b:initB,onSave,tdS,iS,bP,bG}){const[ed,setEd]=useState(false);const[a,setA]=useState(initA);const[b,setB]=useState(initB);useEffect(()=>{setA(initA);setB(initB);},[initA,initB]);return(<tr className="row-hover" style={{background:ed?"#fdfbf5":"transparent"}}><td style={{...tdS,fontWeight:600}}>{label}</td><td style={{...tdS,textAlign:"right"}}>{ed?<input style={iS} type="number" value={a} onChange={e=>setA(+e.target.value)}/>:<span style={{fontVariantNumeric:"tabular-nums"}}>{fmt(initA)}</span>}</td><td style={{...tdS,textAlign:"right"}}>{ed?<input style={iS} type="number" value={b} onChange={e=>setB(+e.target.value)}/>:<span style={{fontVariantNumeric:"tabular-nums"}}>{fmt(initB)}</span>}</td><td style={{...tdS,textAlign:"right",fontWeight:700}}>{fmt((ed?a:initA)+(ed?b:initB))}</td><td style={tdS}>{ed?<div style={{display:"flex",gap:6}}><button className="btn-press" style={bP} onClick={()=>{onSave(a,b);setEd(false);}}>OK</button><button className="btn-press" style={bG} onClick={()=>{setA(initA);setB(initB);setEd(false);}}>X</button></div>:<button className="btn-press" style={bG} onClick={()=>setEd(true)}>Modifier</button>}</td></tr>);}
-
-function ChgRow({charge,l:initL,o:initO,onSave,onDelete,onUpdateCompte,tdS,iS,bP,bG,bD}){const[ed,setEd]=useState(false);const[l,setL]=useState(initL);const[o,setO]=useState(initO);const[compte,setCompte]=useState(charge.fields?.compte||"Commun");useEffect(()=>{setL(initL);setO(initO);setCompte(charge.fields?.compte||"Commun");},[initL,initO,charge.fields?.compte]);return(<tr className="row-hover" style={{background:ed?"#fdfbf5":"transparent"}}><td style={tdS}>{charge.fields?.description}</td><td style={tdS}>{ed?<div style={{display:"flex",gap:4}}>{["Commun","Perso"].map(c=><button key={c} className="btn-press" onClick={()=>setCompte(c)} style={{padding:"3px 8px",border:compte===c?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:6,cursor:"pointer",fontSize:10,fontWeight:compte===c?700:400,background:compte===c?"rgba(26,26,46,0.04)":"#fff",color:compte===c?"#1a1a2e":"#8a8578"}}>{c}</button>)}</div>:<span style={{display:"inline-block",padding:"3px 10px",borderRadius:6,fontSize:10,fontWeight:700,letterSpacing:"0.04em",background:charge.fields?.compte==="Perso"?"#fef2f2":"#eff6ff",color:charge.fields?.compte==="Perso"?"#b91c1c":"#1e40af",textTransform:"uppercase"}}>{charge.fields?.compte||"Commun"}</span>}</td><td style={{...tdS,textAlign:"right"}}>{ed?<input style={iS} type="number" value={l} onChange={e=>setL(+e.target.value)}/>:<span style={{fontVariantNumeric:"tabular-nums"}}>{fmt(initL)}</span>}</td><td style={{...tdS,textAlign:"right"}}>{ed?<input style={iS} type="number" value={o} onChange={e=>setO(+e.target.value)}/>:<span style={{fontVariantNumeric:"tabular-nums"}}>{fmt(initO)}</span>}</td><td style={{...tdS,textAlign:"right",fontWeight:700}}>{fmt((ed?l:initL)+(ed?o:initO))}</td><td style={tdS}><div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>{ed?<><button className="btn-press" style={bP} onClick={()=>{onSave(l,o,compte);setEd(false);}}>OK</button><button className="btn-press" style={bG} onClick={()=>{setL(initL);setO(initO);setCompte(charge.fields?.compte||"Commun");setEd(false);}}>X</button></>:<><button className="btn-press" style={{...bG,padding:"6px 12px",fontSize:11}} onClick={()=>setEd(true)}>Modifier</button><button className="btn-press" style={bD} onClick={onDelete}>Suppr.</button></>}</div></td></tr>);}
-
+function ChgRow({charge,l:initL,o:initO,onSave,onDelete,tdS,iS,bP,bG,bD}){const[ed,setEd]=useState(false);const[l,setL]=useState(initL);const[o,setO]=useState(initO);const[compte,setCompte]=useState(charge.fields?.compte||"Commun");useEffect(()=>{setL(initL);setO(initO);setCompte(charge.fields?.compte||"Commun");},[initL,initO,charge.fields?.compte]);return(<tr className="row-hover" style={{background:ed?"#fdfbf5":"transparent"}}><td style={tdS}>{charge.fields?.description}</td><td style={tdS}>{ed?<div style={{display:"flex",gap:4}}>{["Commun","Perso"].map(c=><button key={c} className="btn-press" onClick={()=>setCompte(c)} style={{padding:"3px 8px",border:compte===c?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:6,cursor:"pointer",fontSize:10,fontWeight:compte===c?700:400,background:compte===c?"rgba(26,26,46,0.04)":"#fff",color:compte===c?"#1a1a2e":"#8a8578"}}>{c}</button>)}</div>:<span style={{display:"inline-block",padding:"3px 10px",borderRadius:6,fontSize:10,fontWeight:700,letterSpacing:"0.04em",background:charge.fields?.compte==="Perso"?"#fef2f2":"#eff6ff",color:charge.fields?.compte==="Perso"?"#b91c1c":"#1e40af",textTransform:"uppercase"}}>{charge.fields?.compte||"Commun"}</span>}</td><td style={{...tdS,textAlign:"right"}}>{ed?<input style={iS} type="number" value={l} onChange={e=>setL(+e.target.value)}/>:<span style={{fontVariantNumeric:"tabular-nums"}}>{fmt(initL)}</span>}</td><td style={{...tdS,textAlign:"right"}}>{ed?<input style={iS} type="number" value={o} onChange={e=>setO(+e.target.value)}/>:<span style={{fontVariantNumeric:"tabular-nums"}}>{fmt(initO)}</span>}</td><td style={{...tdS,textAlign:"right",fontWeight:700}}>{fmt((ed?l:initL)+(ed?o:initO))}</td><td style={tdS}><div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>{ed?<><button className="btn-press" style={bP} onClick={()=>{onSave(l,o,compte);setEd(false);}}>OK</button><button className="btn-press" style={bG} onClick={()=>{setL(initL);setO(initO);setCompte(charge.fields?.compte||"Commun");setEd(false);}}>X</button></>:<><button className="btn-press" style={{...bG,padding:"6px 12px",fontSize:11}} onClick={()=>setEd(true)}>Modifier</button><button className="btn-press" style={bD} onClick={onDelete}>Suppr.</button></>}</div></td></tr>);}
 function EpRow({ep,montant,cumul,onSave,onDelete,tdS,iS,bP,bG,bD}){const[ed,setEd]=useState(false);const[v,setV]=useState(montant);useEffect(()=>{setV(montant);},[montant]);return(<tr className="row-hover" style={{background:ed?"#fdfbf5":"transparent"}}><td style={{...tdS,fontWeight:600}}>{ep.fields?.type}</td><td style={tdS}>{ep.fields?.beneficiaire}</td><td style={{...tdS,textAlign:"right"}}>{ed?<input style={iS} type="number" value={v} onChange={e=>setV(+e.target.value)}/>:<span style={{fontVariantNumeric:"tabular-nums"}}>{fmt(montant)}</span>}</td><td style={{...tdS,textAlign:"right",color:"#8a8578"}}>{fmt(cumul)}</td><td style={tdS}><div style={{display:"flex",gap:6}}>{ed?<><button className="btn-press" style={bP} onClick={()=>{onSave(v);setEd(false);}}>OK</button><button className="btn-press" style={bG} onClick={()=>{setV(montant);setEd(false);}}>X</button></>:<><button className="btn-press" style={bG} onClick={()=>setEd(true)}>Modifier</button><button className="btn-press" style={bD} onClick={onDelete}>Suppr.</button></>}</div></td></tr>);}
-
 function ObjRow({obj,epargne,emByYear,onSave,onDelete,tdS,iS,bP,bG,bD}){const[ed,setEd]=useState(false);const[v,setV]=useState(obj.fields?.objectif_annuel||0);const type=obj.fields?.type||"";const actual=emByYear.reduce((s,em)=>{const e=epargne.find(e=>{const l=em.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===e.id;});if(!e)return s;if(type.includes(e.fields.type)&&(type.includes(e.fields.beneficiaire)||type.includes("Commun")))return s+(em.fields.montant||0);return s;},0);const pct=v>0?(actual/v)*100:0;return(<tr className="row-hover" style={{background:ed?"#fdfbf5":"transparent"}}><td style={{...tdS,fontWeight:600}}>{type}</td><td style={{...tdS,textAlign:"right"}}>{ed?<input style={iS} type="number" value={v} onChange={e=>setV(+e.target.value)}/>:fmt(obj.fields?.objectif_annuel)}</td><td style={{...tdS,textAlign:"right"}}>{fmt(actual)}</td><td style={tdS}><div style={{display:"flex",alignItems:"center",gap:10}}><div style={{flex:1,height:6,borderRadius:3,background:"#f2efeb",overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:pct>=100?"linear-gradient(90deg,#15803d,#22c55e)":"linear-gradient(90deg,#1a1a2e,#44427a)",borderRadius:3,transition:"width .6s cubic-bezier(.4,0,.2,1)"}}/></div><span style={{fontSize:11,fontWeight:700,color:pct>=100?"#15803d":"#1a1a2e",minWidth:36,textAlign:"right"}}>{pct.toFixed(0)}%</span></div></td><td style={tdS}><div style={{display:"flex",gap:6}}>{ed?<><button className="btn-press" style={bP} onClick={()=>{onSave(v);setEd(false);}}>OK</button><button className="btn-press" style={bG} onClick={()=>{setV(obj.fields?.objectif_annuel||0);setEd(false);}}>X</button></>:<><button className="btn-press" style={bG} onClick={()=>setEd(true)}>Modifier</button><button className="btn-press" style={bD} onClick={onDelete}>Suppr.</button></>}</div></td></tr>);}
