@@ -730,9 +730,9 @@ function SimulateurImmobilier() {
                 <FormField label="Mensualité crédit actuel" suffix="€/mois"><NumInput value={mensActuelle} onChange={setMensActuelle}/></FormField>
                 <FormField label="Capital restant dû" hint="Rang 88 du tableau (avril 2026)" suffix="€"><NumInput value={crd} onChange={setCrd}/></FormField>
                 {vendMaison && <FormField label="Prix de vente estimé" hint="72m² Carrez + 35m² niv.0 • Plateau Fontenay" suffix="€" full><NumInput value={prixVente} onChange={setPrixVente}/></FormField>}
-              {vendMaison && <EstimationBienDVF prixVente={prixVente} onPrixChange={setPrixVente}/>}
               </div>
             </Card>
+            {vendMaison && <EstimationBienDVF prixVente={prixVente} onPrixChange={setPrixVente}/>}
             <Card title="📈 Paramètres du prêt">
               <div style={styles.formGrid}>
                 <FormField label="Apport personnel (hors vente)" hint="PEE Ophélie, épargne…" suffix="€"><NumInput value={apportPerso} onChange={setApportPerso}/></FormField>
@@ -1693,10 +1693,17 @@ function MarcheImmobilier({ r, surfaceMin, nbChambres, styles }) {
 function EstimationBienDVF({ prixVente, onPrixChange }) {
   const [dvfData, setDvfData]       = useState(null);
   const [loading, setLoading]       = useState(false);
-  const [surface, setSurface]       = useState(107); // 72 Carrez + 35 niv.0
   const [surfaceCarrez, setSurfaceCarrez] = useState(72);
   const [surfaceNiv0, setSurfaceNiv0]    = useState(35);
-  const [communeCode]               = useState('94033'); // Fontenay-sous-Bois
+  const [terrain, setTerrain]       = useState(0);      // m² terrain
+  const [travaux, setTravaux]       = useState(0);      // € travaux estimés
+  const [anneeConst, setAnneeConst] = useState(1970);   // année construction
+  const [etat, setEtat]             = useState('bon');  // etat du bien
+  const [communeInput, setCommuneInput] = useState('Fontenay-sous-Bois');
+  const [communeCode, setCommuneCode]   = useState('94033');
+  const [communeSugg, setCommuneSugg]   = useState([]);
+  const [showSugg, setShowSugg]         = useState(false);
+  const sugTimer = useRef(null);
 
   useEffect(() => {
     setLoading(true);
@@ -1706,92 +1713,334 @@ function EstimationBienDVF({ prixVente, onPrixChange }) {
       .catch(() => setLoading(false));
   }, [communeCode]);
 
-  const totalSurface = surfaceCarrez + surfaceNiv0;
-  const prixM2 = dvfData?.prix_m2_median;
-  // Maisons : la surface niv.0 (semi-enterré) compte ~60% de la valeur Carrez
+  const rechercherCommune = (val) => {
+    setCommuneInput(val);
+    clearTimeout(sugTimer.current);
+    if (val.length < 2) { setCommuneSugg([]); setShowSugg(false); return; }
+    sugTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(val)}&fields=code,nom,codesPostaux,departement&limit=6&boost=population`);
+        const data = await res.json();
+        setCommuneSugg(data || []); setShowSugg(true);
+      } catch {}
+    }, 250);
+  };
+
+  const choisirCommune = (c) => {
+    setCommuneCode(c.code);
+    setCommuneInput(`${c.nom} (${c.codesPostaux?.[0] || ''})`);
+    setCommuneSugg([]); setShowSugg(false);
+  };
+
   const surfacePonderee = surfaceCarrez + surfaceNiv0 * 0.6;
-  const estimBasse  = prixM2 ? Math.round(prixM2 * 0.90 * surfacePonderee / 1000) * 1000 : null;
-  const estimHaute  = prixM2 ? Math.round(prixM2 * 1.10 * surfacePonderee / 1000) * 1000 : null;
-  const estimCentrale = prixM2 ? Math.round(prixM2 * surfacePonderee / 1000) * 1000 : null;
+  const prixM2 = dvfData?.prix_m2_median;
 
-  const ecart = estimCentrale ? Math.round(((prixVente - estimCentrale) / estimCentrale) * 100) : null;
+  // Coefficient d'état
+  const coefEtat = { 'excellent': 1.08, 'bon': 1.0, 'moyen': 0.92, 'travaux': 0.82 }[etat] || 1.0;
+  // Coefficient ancienneté (légère décote pour très ancien)
+  const age = new Date().getFullYear() - anneeConst;
+  const coefAge = age < 10 ? 1.05 : age < 30 ? 1.0 : age < 60 ? 0.97 : 0.94;
+  // Bonus terrain (si > 100m², légère plus-value ~500€/m² au-delà de 100m²)
+  const bonusTerrain = terrain > 100 ? Math.round((terrain - 100) * 350) : 0;
 
-  const iS = { padding: '7px 10px', border: '1px solid #ddd8d0', borderRadius: 8, fontSize: 13, width: '100%', background: '#faf9f7', textAlign: 'right', fontFamily: "'DM Sans',sans-serif" };
+  const coefTotal = coefEtat * coefAge;
+  const estimBasse    = prixM2 ? Math.round((prixM2 * 0.90 * coefTotal * surfacePonderee + bonusTerrain - travaux) / 1000) * 1000 : null;
+  const estimCentrale = prixM2 ? Math.round((prixM2 * coefTotal * surfacePonderee + bonusTerrain - travaux * 0.5) / 1000) * 1000 : null;
+  const estimHaute    = prixM2 ? Math.round((prixM2 * 1.10 * coefTotal * surfacePonderee + bonusTerrain) / 1000) * 1000 : null;
+
+  const ecart = estimCentrale && prixVente ? Math.round(((prixVente - estimCentrale) / estimCentrale) * 100) : null;
+  const ecartColor = ecart === null ? '#8a9ab0' : Math.abs(ecart) <= 10 ? '#16a34a' : ecart > 10 ? '#7c3aed' : '#dc2626';
+  const ecartLabel  = ecart === null ? '—' : Math.abs(ecart) <= 10 ? '✅ Cohérent' : ecart > 10 ? '⬆️ Au-dessus du marché' : '⬇️ En dessous';
+
+  // Indicateur de liquidité (temps de vente estimé basé sur écart marché)
+  const liquidite = ecart === null ? null : ecart < -5 ? { label: 'Vente rapide', color: '#16a34a', icon: '🔥' } : ecart <= 5 ? { label: 'Vente normale', color: '#0369a1', icon: '✅' } : ecart <= 15 ? { label: 'Vente lente', color: '#f59e0b', icon: '⏳' } : { label: 'Difficile à vendre', color: '#dc2626', icon: '⚠️' };
+
+  const iS = { padding: '8px 12px', border: '1px solid #bae6fd', borderRadius: 8, fontSize: 13, width: '100%', background: '#fff', textAlign: 'right', fontFamily: "'DM Sans',sans-serif", color: '#1e3a5f' };
+  const lS = { fontSize: 10, fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 };
 
   return (
-    <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 14, padding: 16, marginTop: 8 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+    <div style={{ background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)', border: '1.5px solid #7dd3fc', borderRadius: 18, padding: 24, marginTop: 0 }}>
+
+      {/* En-tête */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#0369a1' }}>📊 Estimation DVF — Fontenay-sous-Bois</div>
-          <div style={{ fontSize: 11, color: '#7dd3fc', marginTop: 2 }}>Basé sur les ventes réelles de maisons 2022-2025</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#0369a1', display: 'flex', alignItems: 'center', gap: 8 }}>
+            📊 Estimation DVF de votre bien
+            {loading && <span style={{ fontSize: 11, background: '#bae6fd', color: '#0369a1', padding: '2px 8px', borderRadius: 6 }}>⏳ Chargement…</span>}
+          </div>
+          <div style={{ fontSize: 12, color: '#38bdf8', marginTop: 4 }}>Basé sur les ventes réelles DVF · Mise à jour semestrielle</div>
         </div>
-        {loading && <span style={{ fontSize: 11, color: '#7dd3fc' }}>⏳ Chargement…</span>}
+        {estimCentrale && (
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 11, color: '#38bdf8', textTransform: 'uppercase', fontWeight: 600 }}>Estimation centrale</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: '#0369a1', fontFamily: "'DM Serif Display',serif" }}>{estimCentrale.toLocaleString('fr-FR')} €</div>
+          </div>
+        )}
       </div>
 
-      {/* Surfaces */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+      {/* Grille paramètres */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr) 1.5fr', gap: 12, marginBottom: 16 }}>
+
+        {/* Commune */}
+        <div style={{ gridColumn: 'span 2', position: 'relative' }}>
+          <label style={lS}>Commune</label>
+          <input type="text" value={communeInput} onChange={e => rechercherCommune(e.target.value)}
+            onBlur={() => setTimeout(() => setShowSugg(false), 150)}
+            onFocus={() => communeSugg.length > 0 && setShowSugg(true)}
+            style={{ ...iS, textAlign: 'left' }} placeholder="Fontenay-sous-Bois…"/>
+          {showSugg && communeSugg.length > 0 && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: '#fff', border: '1px solid #bae6fd', borderRadius: 10, boxShadow: '0 8px 24px rgba(3,105,161,0.12)', marginTop: 4, overflow: 'hidden' }}>
+              {communeSugg.map((c, i) => (
+                <div key={c.code} onMouseDown={() => choisirCommune(c)}
+                  style={{ padding: '9px 14px', cursor: 'pointer', fontSize: 13, borderBottom: i < communeSugg.length - 1 ? '1px solid #f0f9ff' : 'none', display: 'flex', justifyContent: 'space-between' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f0f9ff'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                  <span style={{ fontWeight: 600, color: '#0369a1' }}>{c.nom}</span>
+                  <span style={{ fontSize: 11, color: '#7dd3fc' }}>{c.codesPostaux?.[0]}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div>
-          <label style={{ fontSize: 10, fontWeight: 600, color: '#0369a1', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Surface Carrez (m²)</label>
+          <label style={lS}>Surface Carrez (m²)</label>
           <input type="number" value={surfaceCarrez} onChange={e => setSurfaceCarrez(+e.target.value)} style={iS}/>
         </div>
         <div>
-          <label style={{ fontSize: 10, fontWeight: 600, color: '#0369a1', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Niv.0 / semi-ent. (m²)</label>
+          <label style={lS}>Niv.0 / sous-sol (m²)</label>
           <input type="number" value={surfaceNiv0} onChange={e => setSurfaceNiv0(+e.target.value)} style={iS}/>
         </div>
         <div>
-          <label style={{ fontSize: 10, fontWeight: 600, color: '#0369a1', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Surface pondérée</label>
-          <div style={{ ...iS, background: '#e0f2fe', color: '#0369a1', fontWeight: 700 }}>{Math.round(surfacePonderee)} m²</div>
+          <label style={lS}>Surface pondérée</label>
+          <div style={{ ...iS, background: '#bae6fd', color: '#0369a1', fontWeight: 700, cursor: 'default' }}>{Math.round(surfacePonderee)} m²</div>
+        </div>
+
+        <div>
+          <label style={lS}>Terrain (m²)</label>
+          <input type="number" value={terrain} onChange={e => setTerrain(+e.target.value)} style={iS} placeholder="0"/>
+        </div>
+        <div>
+          <label style={lS}>Année construction</label>
+          <input type="number" value={anneeConst} onChange={e => setAnneeConst(+e.target.value)} style={iS}/>
+        </div>
+        <div>
+          <label style={lS}>État du bien</label>
+          <select value={etat} onChange={e => setEtat(e.target.value)} style={{ ...iS, textAlign: 'left', cursor: 'pointer' }}>
+            <option value="excellent">Excellent (+8%)</option>
+            <option value="bon">Bon état (réf.)</option>
+            <option value="moyen">Moyen (−8%)</option>
+            <option value="travaux">Gros travaux (−18%)</option>
+          </select>
+        </div>
+        <div>
+          <label style={lS}>Travaux estimés (€)</label>
+          <input type="number" value={travaux} onChange={e => setTravaux(+e.target.value)} style={iS} placeholder="0"/>
+        </div>
+        <div>
+          <label style={lS}>Prix/m² DVF médian</label>
+          <div style={{ ...iS, background: '#bae6fd', color: '#0369a1', fontWeight: 700, cursor: 'default' }}>
+            {prixM2 ? `${prixM2.toLocaleString('fr-FR')} €` : '—'}
+          </div>
         </div>
       </div>
 
-      {/* Fourchette */}
-      {prixM2 && estimCentrale && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
-          <div style={{ padding: '10px 12px', background: '#fff', borderRadius: 10, border: '1px solid #bae6fd' }}>
-            <div style={{ fontSize: 10, color: '#7dd3fc', textTransform: 'uppercase', fontWeight: 600 }}>Prix DVF médian/m²</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#0369a1', marginTop: 2 }}>{prixM2.toLocaleString('fr-FR')} €</div>
-          </div>
-          <div style={{ padding: '10px 12px', background: '#fff', borderRadius: 10, border: '1px solid #bae6fd' }}>
-            <div style={{ fontSize: 10, color: '#7dd3fc', textTransform: 'uppercase', fontWeight: 600 }}>Estimation basse (−10%)</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#0369a1', marginTop: 2 }}>{estimBasse?.toLocaleString('fr-FR')} €</div>
-          </div>
-          <div style={{ padding: '10px 12px', background: '#0369a1', borderRadius: 10 }}>
-            <div style={{ fontSize: 10, color: '#bae6fd', textTransform: 'uppercase', fontWeight: 600 }}>Estimation centrale</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginTop: 2 }}>{estimCentrale?.toLocaleString('fr-FR')} €</div>
-          </div>
-          <div style={{ padding: '10px 12px', background: '#fff', borderRadius: 10, border: '1px solid #bae6fd' }}>
-            <div style={{ fontSize: 10, color: '#7dd3fc', textTransform: 'uppercase', fontWeight: 600 }}>Estimation haute (+10%)</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#0369a1', marginTop: 2 }}>{estimHaute?.toLocaleString('fr-FR')} €</div>
+      {/* Barre de fourchette visuelle */}
+      {estimCentrale && estimBasse && estimHaute && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: 8, marginBottom: 8 }}>
+            <div style={{ background: '#fff', border: '1px solid #bae6fd', borderRadius: 12, padding: '12px 16px' }}>
+              <div style={{ fontSize: 10, color: '#38bdf8', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Basse (−10%)</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#0369a1' }}>{estimBasse.toLocaleString('fr-FR')} €</div>
+              <div style={{ fontSize: 11, color: '#7dd3fc', marginTop: 2 }}>{Math.round(estimBasse / surfacePonderee).toLocaleString('fr-FR')} €/m²</div>
+            </div>
+            <div style={{ background: '#0369a1', borderRadius: 12, padding: '12px 16px', textAlign: 'center', boxShadow: '0 4px 20px rgba(3,105,161,0.25)' }}>
+              <div style={{ fontSize: 10, color: '#bae6fd', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Estimation centrale</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', fontFamily: "'DM Serif Display',serif" }}>{estimCentrale.toLocaleString('fr-FR')} €</div>
+              <div style={{ fontSize: 12, color: '#7dd3fc', marginTop: 2 }}>{Math.round(estimCentrale / surfacePonderee).toLocaleString('fr-FR')} €/m² pondéré</div>
+              {(bonusTerrain > 0 || travaux > 0) && (
+                <div style={{ fontSize: 10, color: '#bae6fd', marginTop: 4 }}>
+                  {bonusTerrain > 0 ? `+${bonusTerrain.toLocaleString('fr-FR')}€ terrain` : ''}
+                  {bonusTerrain > 0 && travaux > 0 ? ' · ' : ''}
+                  {travaux > 0 ? `−${Math.round(travaux * 0.5).toLocaleString('fr-FR')}€ travaux` : ''}
+                </div>
+              )}
+            </div>
+            <div style={{ background: '#fff', border: '1px solid #bae6fd', borderRadius: 12, padding: '12px 16px', textAlign: 'right' }}>
+              <div style={{ fontSize: 10, color: '#38bdf8', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Haute (+10%)</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#0369a1' }}>{estimHaute.toLocaleString('fr-FR')} €</div>
+              <div style={{ fontSize: 11, color: '#7dd3fc', marginTop: 2 }}>{Math.round(estimHaute / surfacePonderee).toLocaleString('fr-FR')} €/m²</div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Comparaison avec prix saisi */}
+      {/* Ligne comparaison + actions */}
       {estimCentrale && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: '#fff', borderRadius: 10, border: '1px solid #bae6fd' }}>
-          <div style={{ flex: 1, fontSize: 13, color: '#0369a1' }}>
-            Prix de vente saisi : <strong>{prixVente.toLocaleString('fr-FR')} €</strong>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 10, alignItems: 'center' }}>
+          <div style={{ background: '#fff', border: '1px solid #bae6fd', borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 10, color: '#38bdf8', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Prix saisi</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#1e3a5f' }}>{prixVente.toLocaleString('fr-FR')} €</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: ecartColor, marginTop: 2 }}>
+              {ecart !== null ? (ecart > 0 ? `+${ecart}%` : `${ecart}%`) : ''} vs DVF
+            </div>
           </div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: ecart !== null && Math.abs(ecart) <= 10 ? '#16a34a' : ecart > 10 ? '#7c3aed' : '#dc2626' }}>
-            {ecart !== null ? (ecart > 0 ? `+${ecart}%` : `${ecart}%`) : ''} vs DVF
+          <div style={{ background: '#fff', border: '1px solid #bae6fd', borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 10, color: '#38bdf8', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Positionnement</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: ecartColor }}>{ecartLabel}</div>
+            <div style={{ fontSize: 11, color: '#7dd3fc', marginTop: 2 }}>Fourchette ±10% autour DVF</div>
           </div>
-          <div style={{ fontSize: 11, color: '#7dd3fc' }}>
-            {ecart !== null && Math.abs(ecart) <= 10 ? '✅ Cohérent' : ecart > 10 ? '⬆️ Au-dessus du marché' : '⬇️ En dessous du marché'}
-          </div>
-          {estimCentrale && (
-            <button
-              onClick={() => onPrixChange(estimCentrale)}
-              style={{ padding: '6px 12px', background: '#0369a1', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}
-            >
-              Utiliser {estimCentrale.toLocaleString('fr-FR')} €
+          {liquidite && (
+            <div style={{ background: '#fff', border: '1px solid #bae6fd', borderRadius: 10, padding: '12px 14px' }}>
+              <div style={{ fontSize: 10, color: '#38bdf8', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Liquidité estimée</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: liquidite.color }}>{liquidite.icon} {liquidite.label}</div>
+              <div style={{ fontSize: 11, color: '#7dd3fc', marginTop: 2 }}>Basé sur positionnement prix</div>
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button onClick={() => onPrixChange(estimCentrale)}
+              style={{ padding: '10px 16px', background: '#0369a1', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap' }}>
+              📌 Utiliser {estimCentrale.toLocaleString('fr-FR')} €
             </button>
+            {estimBasse && (
+              <button onClick={() => onPrixChange(estimBasse)}
+                style={{ padding: '8px 16px', background: '#fff', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: 10, cursor: 'pointer', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                Prudent : {estimBasse.toLocaleString('fr-FR')} €
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginTop: 14, fontSize: 10, color: '#38bdf8', lineHeight: 1.5 }}>
+        ⚠️ Prix nets vendeur (hors frais agence et notaire). Niv.0 pondéré à 60% du Carrez. Coefficients état et ancienneté appliqués. Pour une estimation précise, consulter 2-3 agences locales.
+        {coefEtat !== 1 && <span> · Coef. état : {coefEtat >= 1 ? '+' : ''}{Math.round((coefEtat - 1) * 100)}%</span>}
+        {coefAge !== 1 && <span> · Coef. ancienneté : {coefAge >= 1 ? '+' : ''}{Math.round((coefAge - 1) * 100)}%</span>}
+      </div>
+    </div>
+  );
+}
+
+                  <span style={{ fontSize: 11, color: '#7dd3fc' }}>{c.codesPostaux?.[0]}</span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
+
+        <div>
+          <label style={lS}>Surface Carrez (m²)</label>
+          <input type="number" value={surfaceCarrez} onChange={e => setSurfaceCarrez(+e.target.value)} style={iS}/>
+        </div>
+        <div>
+          <label style={lS}>Niv.0 / sous-sol (m²)</label>
+          <input type="number" value={surfaceNiv0} onChange={e => setSurfaceNiv0(+e.target.value)} style={iS}/>
+        </div>
+        <div>
+          <label style={lS}>Surface pondérée</label>
+          <div style={{ ...iS, background: '#bae6fd', color: '#0369a1', fontWeight: 700, cursor: 'default' }}>{Math.round(surfacePonderee)} m²</div>
+        </div>
+
+        <div>
+          <label style={lS}>Terrain (m²)</label>
+          <input type="number" value={terrain} onChange={e => setTerrain(+e.target.value)} style={iS} placeholder="0"/>
+        </div>
+        <div>
+          <label style={lS}>Année construction</label>
+          <input type="number" value={anneeConst} onChange={e => setAnneeConst(+e.target.value)} style={iS}/>
+        </div>
+        <div>
+          <label style={lS}>État du bien</label>
+          <select value={etat} onChange={e => setEtat(e.target.value)} style={{ ...iS, textAlign: 'left', cursor: 'pointer' }}>
+            <option value="excellent">Excellent (+8%)</option>
+            <option value="bon">Bon état (réf.)</option>
+            <option value="moyen">Moyen (−8%)</option>
+            <option value="travaux">Gros travaux (−18%)</option>
+          </select>
+        </div>
+        <div>
+          <label style={lS}>Travaux estimés (€)</label>
+          <input type="number" value={travaux} onChange={e => setTravaux(+e.target.value)} style={iS} placeholder="0"/>
+        </div>
+        <div>
+          <label style={lS}>Prix/m² DVF médian</label>
+          <div style={{ ...iS, background: '#bae6fd', color: '#0369a1', fontWeight: 700, cursor: 'default' }}>
+            {prixM2 ? `${prixM2.toLocaleString('fr-FR')} €` : '—'}
+          </div>
+        </div>
+      </div>
+
+      {/* Barre de fourchette visuelle */}
+      {estimCentrale && estimBasse && estimHaute && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: 8, marginBottom: 8 }}>
+            <div style={{ background: '#fff', border: '1px solid #bae6fd', borderRadius: 12, padding: '12px 16px' }}>
+              <div style={{ fontSize: 10, color: '#38bdf8', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Basse (−10%)</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#0369a1' }}>{estimBasse.toLocaleString('fr-FR')} €</div>
+              <div style={{ fontSize: 11, color: '#7dd3fc', marginTop: 2 }}>{Math.round(estimBasse / surfacePonderee).toLocaleString('fr-FR')} €/m²</div>
+            </div>
+            <div style={{ background: '#0369a1', borderRadius: 12, padding: '12px 16px', textAlign: 'center', boxShadow: '0 4px 20px rgba(3,105,161,0.25)' }}>
+              <div style={{ fontSize: 10, color: '#bae6fd', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Estimation centrale</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', fontFamily: "'DM Serif Display',serif" }}>{estimCentrale.toLocaleString('fr-FR')} €</div>
+              <div style={{ fontSize: 12, color: '#7dd3fc', marginTop: 2 }}>{Math.round(estimCentrale / surfacePonderee).toLocaleString('fr-FR')} €/m² pondéré</div>
+              {(bonusTerrain > 0 || travaux > 0) && (
+                <div style={{ fontSize: 10, color: '#bae6fd', marginTop: 4 }}>
+                  {bonusTerrain > 0 ? `+${bonusTerrain.toLocaleString('fr-FR')}€ terrain` : ''}
+                  {bonusTerrain > 0 && travaux > 0 ? ' · ' : ''}
+                  {travaux > 0 ? `−${Math.round(travaux * 0.5).toLocaleString('fr-FR')}€ travaux` : ''}
+                </div>
+              )}
+            </div>
+            <div style={{ background: '#fff', border: '1px solid #bae6fd', borderRadius: 12, padding: '12px 16px', textAlign: 'right' }}>
+              <div style={{ fontSize: 10, color: '#38bdf8', textTransform: 'uppercase', fontWeight: 700, marginBottom: 4 }}>Haute (+10%)</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#0369a1' }}>{estimHaute.toLocaleString('fr-FR')} €</div>
+              <div style={{ fontSize: 11, color: '#7dd3fc', marginTop: 2 }}>{Math.round(estimHaute / surfacePonderee).toLocaleString('fr-FR')} €/m²</div>
+            </div>
+          </div>
+        </div>
       )}
 
-      <div style={{ marginTop: 10, fontSize: 10, color: '#7dd3fc' }}>
-        ⚠️ Estimation indicative basée sur DVF (prix nets vendeur, hors frais agence et notaire).
-        Le niv.0 est pondéré à 60% de la valeur Carrez. Pour une estimation précise, consulter 2-3 agences locales.
+      {/* Ligne comparaison + actions */}
+      {estimCentrale && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 10, alignItems: 'center' }}>
+          <div style={{ background: '#fff', border: '1px solid #bae6fd', borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 10, color: '#38bdf8', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Prix saisi</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#1e3a5f' }}>{prixVente.toLocaleString('fr-FR')} €</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: ecartColor, marginTop: 2 }}>
+              {ecart !== null ? (ecart > 0 ? `+${ecart}%` : `${ecart}%`) : ''} vs DVF
+            </div>
+          </div>
+          <div style={{ background: '#fff', border: '1px solid #bae6fd', borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 10, color: '#38bdf8', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Positionnement</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: ecartColor }}>{ecartLabel}</div>
+            <div style={{ fontSize: 11, color: '#7dd3fc', marginTop: 2 }}>Fourchette ±10% autour DVF</div>
+          </div>
+          {liquidite && (
+            <div style={{ background: '#fff', border: '1px solid #bae6fd', borderRadius: 10, padding: '12px 14px' }}>
+              <div style={{ fontSize: 10, color: '#38bdf8', textTransform: 'uppercase', fontWeight: 700, marginBottom: 3 }}>Liquidité estimée</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: liquidite.color }}>{liquidite.icon} {liquidite.label}</div>
+              <div style={{ fontSize: 11, color: '#7dd3fc', marginTop: 2 }}>Basé sur positionnement prix</div>
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button onClick={() => onPrixChange(estimCentrale)}
+              style={{ padding: '10px 16px', background: '#0369a1', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap' }}>
+              📌 Utiliser {estimCentrale.toLocaleString('fr-FR')} €
+            </button>
+            {estimBasse && (
+              <button onClick={() => onPrixChange(estimBasse)}
+                style={{ padding: '8px 16px', background: '#fff', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: 10, cursor: 'pointer', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                Prudent : {estimBasse.toLocaleString('fr-FR')} €
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginTop: 14, fontSize: 10, color: '#38bdf8', lineHeight: 1.5 }}>
+        ⚠️ Prix nets vendeur (hors frais agence et notaire). Niv.0 pondéré à 60% du Carrez. Coefficients état et ancienneté appliqués. Pour une estimation précise, consulter 2-3 agences locales.
+        {coefEtat !== 1 && <span> · Coef. état : {coefEtat >= 1 ? '+' : ''}{Math.round((coefEtat - 1) * 100)}%</span>}
+        {coefAge !== 1 && <span> · Coef. ancienneté : {coefAge >= 1 ? '+' : ''}{Math.round((coefAge - 1) * 100)}%</span>}
       </div>
     </div>
   );
