@@ -818,41 +818,6 @@ function SimulateurImmobilier() {
         </div>
       )}
 
-      {activeTab === 'marchex' && (
-        <div>
-          <div style={styles.annoncesHeader}>
-            <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a3a5c' }}>Maisons disponibles dans votre budget</h3>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {[{ label: '🔍 SeLoger', href: `https://www.seloger.com/list.htm?projects=2&types=2&places=[{ci:940}]&price=${Math.round(r.budgetNet * 0.7)}/${Math.round(r.budgetNet)}&surface=${surfaceMin}/NaN&rooms=4,5` }, { label: '🟠 LeBonCoin', href: `https://www.leboncoin.fr/recherche?category=9&locations=Val-de-Marne&real_estate_type=house&price=${Math.round(r.budgetNet * 0.7)}-${Math.round(r.budgetNet)}&square=${surfaceMin}-max` }, { label: "🏠 Bien'ici", href: `https://www.bienici.com/recherche/achat/val-de-marne-94/maison?prix-max=${Math.round(r.budgetNet)}&surface-min=${surfaceMin}&nb-pieces-min=4` }].map(l => (
-                <a key={l.label} href={l.href} target="_blank" rel="noreferrer" style={styles.linkBtn}>{l.label}</a>
-              ))}
-            </div>
-          </div>
-          <div style={styles.infoBox}><span>ℹ️</span><span><strong>Annonces simulées</strong> basées sur les prix DVF 2024-2025 du Val-de-Marne. Cliquez sur les liens ci-dessus pour voir les vraies annonces avec vos critères pré-remplis.</span></div>
-          <div style={styles.annoncesGrid}>
-            {ANNONCES_BASE.filter(a => a.surface >= surfaceMin - 15).map((a, i) => {
-              const overBy = a.prix - r.budgetNet;
-              const inBudget = overBy <= 0;
-              const slightly = !inBudget && overBy <= 50000;
-              const statusCls = inBudget ? 'in' : slightly ? 'slight' : 'out';
-              const statusTxt = inBudget ? '✓ Dans votre budget' : slightly ? `⚠ ${fmt(overBy)} au-dessus` : `✗ Hors budget (+${fmt(overBy)})`;
-              const statusStyle = { in: { bg: '#d1fae5', color: '#065f46' }, slight: { bg: '#fef3c7', color: '#92400e' }, out: { bg: '#fee2e2', color: '#991b1b' } }[statusCls];
-              return (
-                <div key={i} style={styles.annonceCard}>
-                  <div style={styles.annonceImg}>🏡{a.statut === 'new' && <span style={{ ...styles.annonceBadge, background: '#22c55e' }}>Nouveau</span>}{a.statut === 'nego' && <span style={{ ...styles.annonceBadge, background: '#f59e0b' }}>Négociable</span>}</div>
-                  <div style={styles.annonceBody}>
-                    <div><span style={{ fontSize: 18, fontWeight: 700, color: '#1a3a5c' }}>{fmt(a.prix)}</span><span style={{ fontSize: 12, color: '#8a9ab0', marginLeft: 6 }}>{Math.round(a.prix / a.surface).toLocaleString('fr-FR')} €/m²</span></div>
-                    <p style={{ fontWeight: 600, color: '#2d4a6d', margin: '6px 0 2px' }}>Maison {a.chambres} chambres</p>
-                    <p style={{ fontSize: 13, color: '#8a9ab0', marginBottom: 10 }}>{a.ville} — {a.quartier}</p>
-                    <div style={styles.annonceSpecs}><span>⬛ {a.surface} m²</span><span>🏠 {a.chambres} ch.</span><span>🌿 {a.terrain} m²</span></div>
-                    <div style={{ ...styles.annonceStatus, background: statusStyle.bg, color: statusStyle.color }}>{statusTxt}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {activeTab === 'scenarios' && (
         <div>
