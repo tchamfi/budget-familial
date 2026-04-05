@@ -44,13 +44,26 @@ async function fetchDVF({ commune, rue, dateMin, dateMax, pageSize = 500 }) {
     params.set('date_mutation__less', dateMax);
   }
 
-  const res = await fetch(`${TABULAR_BASE}?${params}`, {
+  const fullUrl = `${TABULAR_BASE}?${params}`;
+  console.log('[DVF] fetch:', fullUrl);
+
+  const res = await fetch(fullUrl, {
     headers: { 'Accept': 'application/json' },
     signal: AbortSignal.timeout(20000),
   });
 
-  if (!res.ok) throw new Error(`DVF API ${res.status}`);
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    console.error('[DVF] erreur', res.status, txt.slice(0, 300));
+    throw new Error(`DVF API ${res.status}: ${txt.slice(0, 100)}`);
+  }
   const json = await res.json();
+  console.log('[DVF] nb résultats bruts:', json.data?.length, '| total:', json.meta?.total, '| dateMin:', dateMin, '| dateMax:', dateMax);
+  // Log des dates min/max des résultats pour vérifier le filtrage
+  if (json.data?.length > 0) {
+    const dates = json.data.map(t => t.date_mutation).filter(Boolean).sort();
+    console.log('[DVF] date min résultat:', dates[0], '| date max résultat:', dates[dates.length-1]);
+  }
 
   // Filtrer : surface > 0, prix réaliste, dédoublonner par id_mutation
   const seen = new Set();
