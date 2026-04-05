@@ -124,14 +124,24 @@ export async function GET(request) {
     if (mode === 'rue') {
       if (!rue) return Response.json({ error: 'rue requis' }, { status: 400 });
 
-      const transactions = await fetchDVF({ commune, rue, pageSize: 500 });
-      transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+      // Deux requêtes en parallèle pour couvrir toute la période :
+      // - 2020-2025 : données récentes (tri desc, les plus récentes d'abord)
+      // - 2014-2019 : données historiques (même rue, même commune)
+      const [recent, ancien] = await Promise.all([
+        fetchDVF({ commune, rue, dateMin: '2020-01-01', pageSize: 500 }),
+        fetchDVF({ commune, rue, dateMin: '2014-01-01', dateMax: '2019-12-31', pageSize: 500 }),
+      ]);
+
+      const transactions = [...recent, ...ancien]
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
 
       return Response.json({
         mode: 'rue',
         commune: COMMUNES_94[commune] || commune,
         rue: rue.toUpperCase().trim(),
         nb: transactions.length,
+        nb_recents: recent.length,
+        nb_historiques: ancien.length,
         transactions,
         source: 'DVF data.gouv.fr 2014-2025 (DGFiP/Etalab)',
       }, { headers: { 'Cache-Control': 'public, max-age=3600' } });
