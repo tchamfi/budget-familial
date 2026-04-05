@@ -922,7 +922,7 @@ function VillesDVF({ villes, filterSecurite, setFilterSecurite, filterBudget, se
         const batch = villesFiltrees.slice(i, i + batchSize);
         await Promise.all(batch.map(async (v) => {
           try {
-            const res = await fetch(`/api/dvf?mode=stats&commune=${v.insee}`);
+            const res = await fetch(`/api/dvf?mode=historique&commune=${v.insee}`);
             const data = await res.json();
             setDvfData(prev => ({ ...prev, [v.insee]: { loading: false, prixM2: data.prix_m2_median, nb: data.nb_transactions, annee: data.annee, source: data.source, error: !data.prix_m2_median } }));
           } catch {
@@ -1303,14 +1303,16 @@ function RechercheRueDVF({ styles }) {
         )}
       </div>
 
-      {/* Note Airtable pour données 2014-2019 */}
+      {/* Source des données */}
       {results && (
-        <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 12, padding: '12px 16px', fontSize: 12, color: '#0369a1', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-          <span style={{ fontSize: 16 }}>💡</span>
+        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '12px 16px', fontSize: 12, color: '#15803d', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <span style={{ fontSize: 16 }}>✅</span>
           <span>
-            <strong>Données 2014-2019 disponibles</strong> — Pour afficher l'historique complet,
-            importez les CSV DVF du Cerema dans Airtable (table <code>DVF_Transactions</code>)
-            et activez l'option dans les paramètres de l'onglet.
+            <strong>Historique complet 2014-2025</strong> —{' '}
+            {results.nb_historiques > 0
+              ? `${results.nb_historiques} ventes 2014-2019 (Cerema/Supabase) + ${results.nb_recents} ventes 2020-2025 (DGFiP)`
+              : `Données DVF data.gouv.fr 2020-2025`
+            }
           </span>
         </div>
       )}
@@ -1378,7 +1380,7 @@ function MarcheAnnonces() {
     if (!communeSelectee?.code) return;
     setDvfLoading(true);
     setDvfData(null);
-    fetch(`/api/dvf?mode=stats&commune=${communeSelectee.code}`)
+    fetch(`/api/dvf?mode=historique&commune=${communeSelectee.code}`)
       .then(r => r.json())
       .then(d => { setDvfData(d); setDvfLoading(false); })
       .catch(() => setDvfLoading(false));
@@ -1588,7 +1590,7 @@ function MarcheImmobilier({ r, surfaceMin, nbChambres, styles }) {
   useEffect(() => {
     if (!communeSelectee?.code) return;
     setDvfData(null);
-    fetch(`/api/dvf?mode=stats&commune=${communeSelectee.code}`)
+    fetch(`/api/dvf?mode=historique&commune=${communeSelectee.code}`)
       .then(r => r.json()).then(setDvfData).catch(() => {});
   }, [communeSelectee?.code]);
 
@@ -1698,7 +1700,7 @@ function EstimationBienDVF({ prixVente, onPrixChange }) {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/dvf?mode=stats&commune=${communeCode}`)
+    fetch(`/api/dvf?mode=historique&commune=${communeCode}`)
       .then(r => r.json())
       .then(d => { setDvfData(d); setLoading(false); })
       .catch(() => setLoading(false));

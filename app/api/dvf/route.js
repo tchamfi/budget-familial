@@ -236,13 +236,25 @@ export async function GET(request) {
           return { year, nb: data.nb, prixM2Median: mediane };
         });
 
+      // Médiane prix/m² sur les 2 dernières années (pour compatibilité avec BudgetApp)
+      const cutoff2 = new Date(); cutoff2.setFullYear(cutoff2.getFullYear() - 2);
+      const recentsFiltered2 = recents.filter(t => new Date(t.date) >= cutoff2);
+      const prixM2List2 = recentsFiltered2
+        .map(t => t.prixM2).filter(p => p && p > 1000 && p < 20000).sort((a, b) => a - b);
+      const mid2 = Math.floor(prixM2List2.length / 2);
+      const mediane2 = prixM2List2.length === 0 ? null
+        : prixM2List2.length % 2 === 0
+          ? Math.round((prixM2List2[mid2-1] + prixM2List2[mid2]) / 2)
+          : Math.round(prixM2List2[mid2]);
+
       return Response.json({
         mode: 'historique',
         commune: COMMUNES_94[commune] || commune,
+        prix_m2_median: mediane2,         // compat BudgetApp (stats récentes 2 ans)
         nb: all.length,
         nb_recents: recents.length,
         nb_historiques: historiques.length,
-        transactions: all.slice(0, 200), // limiter à 200 pour le rendu
+        transactions: all.slice(0, 500),  // 500 transactions pour le graphique
         evolution,
       }, { headers: { 'Cache-Control': 'public, max-age=3600' } });
     }
