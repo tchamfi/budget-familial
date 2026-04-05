@@ -534,8 +534,6 @@ export default function BudgetApp(){
               {["Prime","Héritage","Remboursement","Vente bien","Autre"].map(s=><option key={s}>{s}</option>)}
             </select>
           </div>
-          <div style={{display:"none"}}
-          </div>
           <div>
             <label style={{display:"block",fontSize:11,fontWeight:600,color:"#8a8578",marginBottom:4,textTransform:"uppercase"}}>Mois</label>
             <select style={{...iS,cursor:"pointer"}} value={nvMois} onChange={e=>setNvMois(+e.target.value)}>
