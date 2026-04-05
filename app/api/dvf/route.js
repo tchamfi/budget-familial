@@ -37,11 +37,11 @@ async function fetchDVF({ commune, rue, dateMin, dateMax, pageSize = 500 }) {
   }
   // Filtre date min si fourni (ex: "2014-01-01")
   if (dateMin) {
-    params.set('date_mutation__greater_equal', dateMin);
+    params.set('date_mutation__greater', dateMin);
   }
   // Filtre date max si fourni (ex: "2019-12-31")
   if (dateMax) {
-    params.set('date_mutation__less_equal', dateMax);
+    params.set('date_mutation__less', dateMax);
   }
 
   const res = await fetch(`${TABULAR_BASE}?${params}`, {
