@@ -392,7 +392,7 @@ export default function BudgetApp(){
   const bG={padding:"8px 16px",background:"transparent",color:"#8a8578",border:"1px solid #ddd8d0",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:500};
   const bD={padding:"5px 10px",background:"transparent",color:"#b91c1c",border:"1px solid #f5c6c6",borderRadius:7,cursor:"pointer",fontSize:10,fontWeight:600};
   const mB=(a)=>({padding:"7px 14px",border:a?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:a?700:400,background:a?"rgba(26,26,46,0.06)":"#fff",color:a?"#1a1a2e":"#8a8578"});
-  const tabs=[["dashboard","Tableau de bord"],["revenus","Revenus"],["charges","Charges"],["epargne","Épargne"],["objectifs","Objectifs"],["virements","Virements"],["impots","Simulateur IR"],["assistant","Assistant IA"],["alertes",`Alertes${alertCount>0?` (${alertCount})`:""}`],["immobilier","🏠 Immobilier"],["marche","🔍 Marché"]];
+  const tabs=[["dashboard","Tableau de bord"],["revenus","Revenus"],["charges","Charges"],["epargne","Épargne"],["objectifs","Objectifs"],["virements","Virements"],["impots","Simulateur IR"],["assistant","Assistant IA"],["alertes",`Alertes${alertCount>0?` (${alertCount})`:""}`],["immobilier","🏠 Immobilier"]]];
   return(<><GlobalStyles/><div className="grain"/><div style={{minHeight:"100vh",background:"#faf9f7"}}>
     {saving&&<div className="fade-in" style={{position:"fixed",bottom:24,right:24,background:"#1a1a2e",color:"#faf9f7",padding:"10px 20px",borderRadius:12,fontSize:13,fontWeight:600,boxShadow:"0 8px 30px rgba(26,26,46,0.2)",zIndex:2000,display:"flex",alignItems:"center",gap:8}}><div style={{width:8,height:8,borderRadius:"50%",background:"#4ade80",animation:"pulse 1s infinite"}}/>Sauvegarde...</div>}
     <div style={{background:"#1a1a2e",padding:"0 max(16px,calc((100% - 1320px)/2 + 36px))",position:"sticky",top:0,zIndex:100}}><div className="header-inner">
@@ -429,7 +429,6 @@ export default function BudgetApp(){
     {tab==="impots"&&<div className="fade-up"><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:20}}>Simulateur Impôt sur le Revenu</h3><TaxSimulator/></div>}
     {tab==="assistant"&&<div className="fade-up" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:16}}>Assistant budgétaire IA</h3><AIAssistant revenus={revenus} charges={charges} chargesMontants={chargesMontants} epargne={epargne} epargneMontants={epargneMontants} objectifs={objectifs} annee={annee}/></div>}
     {tab==="alertes"&&<div className="fade-up"><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:16}}>Alertes {annee}</h3><Alerts revenus={revenus} chargesMontants={chargesMontants} epargneMontants={epargneMontants} annee={annee} mois={mois}/></div>}
-    {tab==="marche"&&<div className="fade-up"><MarcheImmobilierPage/></div>}
     {tab==="immobilier"&&<div className="fade-up">
       <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:28,paddingBottom:20,borderBottom:"1px solid #e8e4dd"}}>
         <div style={{width:48,height:48,background:"linear-gradient(135deg,#1a3a5c,#2d5986)",borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>🏠</div>
@@ -564,7 +563,7 @@ function SimulateurImmobilier() {
         <span style={styles.badge('#e0e7ff', '#3730a3')}>Mode {modeCalc === 'auto' ? 'Auto HCSF' : 'Manuel'}</span>
       </div>
       <div style={styles.tabs}>
-        {[{ id: 'simulation', label: '📊 Simulation' }, { id: 'annonces', label: '🏡 Annonces' }, { id: 'scenarios', label: '⚖️ Scénarios' }, { id: 'villes', label: '📍 Villes' }, { id: 'transactions', label: '🔍 Transactions DVF' }].map(t => (
+        {[{ id: 'simulation', label: '📊 Simulation' }, { id: 'scenarios', label: '⚖️ Scénarios' }, { id: 'transactions', label: '🔍 Transactions DVF' }, { id: 'marche', label: '🔍 Marché & Annonces' }].map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)} style={activeTab === t.id ? styles.tabActive : styles.tab}>{t.label}</button>
         ))}
       </div>
@@ -664,7 +663,7 @@ function SimulateurImmobilier() {
         </div>
       )}
 
-      {activeTab === 'annonces' && (
+      {activeTab === 'marchex' && (
         <div>
           <div style={styles.annoncesHeader}>
             <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a3a5c' }}>Maisons disponibles dans votre budget</h3>
@@ -712,7 +711,7 @@ function SimulateurImmobilier() {
 
       {activeTab === 'marche' && <MarcheImmobilier r={r} surfaceMin={surfaceMin} nbChambres={nbChambres} styles={styles}/>}
 
-      {activeTab === 'villes' && <VillesDVF villes={VILLES} filterSecurite={filterSecurite} setFilterSecurite={setFilterSecurite} filterBudget={filterBudget} setFilterBudget={setFilterBudget} surfaceMin={surfaceMin} fmtFn={fmt} styles={styles} FormField={FormField} NumInput={NumInput} Card={Card}/>}
+      {activeTab === 'marche' && <MarcheImmobilier r={r} surfaceMin={surfaceMin} nbChambres={nbChambres} styles={styles}/>}
 
       <div style={styles.footer}>Simulation indicative • Données DVF Val-de-Marne 2024-2025 • Taux avril 2026 • Règles HCSF (35% max)</div>
     </div>
@@ -1281,9 +1280,8 @@ function MarcheAnnonces() {
       bienici: `https://www.bienici.com/recherche/achat/${slug}-${cp}/maisonvilla?prix-max=${budgetMax}&surface-min=${surfaceMin}&nb-pieces-min=${pieces}`,
       lbc:     `https://www.leboncoin.fr/recherche?category=9&real_estate_type=1&locations=${cp}&price=min-${budgetMax}&square=${surfaceMin}-max&rooms=${pieces}-max`,
       pap:     `https://www.pap.fr/annonce/vente-maisons-${slug}-g${code}?prix-max=${budgetMax}&surface-min=${surfaceMin}&nb-pieces-min=${pieces}`,
-      seloger: `https://www.seloger.com/annonces/achat/maison/${slug}-${deptNum}/?idtt=2&naturebien=1&pxmax=${budgetMax}&surfacemin=${surfaceMin}&nb_pieces_min=${pieces}`,
-      figaro:  `https://immobilier.lefigaro.fr/annonces/immobilier/vente/maison/?localisation=${encodeURIComponent(nom)}+%28${deptNum}%29&prix-max=${budgetMax}&surface-min=${surfaceMin}&nb-pieces=${pieces}`,
-      logicimmo: `https://www.logic-immo.com/vente-maison-${slug}-${cp},${cp}_2/options/groupprptypesids=1/pricemax=${budgetMax}/surfacemin=${surfaceMin}/piecemin=${pieces}`,
+      seloger: `https://www.seloger.com/list.htm?idtt=2&naturebien=1&zi=${cp}&pxmax=${budgetMax}&surfacemin=${surfaceMin}&nb_pieces_min=${pieces}`,
+      ma: `https://www.meilleursagents.com/prix-immobilier/${slug}-${cp}/`,
     };
   };
 
@@ -1295,12 +1293,11 @@ function MarcheAnnonces() {
   const nS = { padding: '9px 14px', border: '1px solid #ddd8d0', borderRadius: 10, fontSize: 14, width: '100%', outline: 'none', background: '#faf9f7', fontFamily: "'DM Sans',sans-serif", textAlign: 'right' };
 
   const SITES = [
-    { key: 'bienici',   label: "Bien'ici",   emoji: '🏠', color: '#2563eb', desc: 'Carte 3D · Agences + particuliers' },
-    { key: 'lbc',       label: 'LeBonCoin',  emoji: '🟠', color: '#f97316', desc: 'Particuliers · Résultats immédiats' },
-    { key: 'pap',       label: 'PAP',        emoji: '📋', color: '#16a34a', desc: 'Particulier à particulier · 0 frais agence' },
-    { key: 'seloger',   label: 'SeLoger',    emoji: '🔵', color: '#0ea5e9', desc: 'Agences · Plus complète en offres' },
-    { key: 'figaro',    label: 'Figaro Immo',emoji: '📰', color: '#7c3aed', desc: 'Agences · Biens premium' },
-    { key: 'logicimmo', label: 'Logic Immo', emoji: '🏡', color: '#0891b2', desc: 'Agences · Bon complément' },
+    { key: 'bienici', label: "Bien'ici",  emoji: '🏠', color: '#2563eb', desc: 'Carte 3D · Agences + particuliers' },
+    { key: 'lbc',     label: 'LeBonCoin', emoji: '🟠', color: '#f97316', desc: 'Particuliers · Sans frais agence' },
+    { key: 'pap',     label: 'PAP',       emoji: '📋', color: '#16a34a', desc: 'Particulier à particulier · 0 frais' },
+    { key: 'seloger', label: 'SeLoger',   emoji: '🔵', color: '#0ea5e9', desc: 'Agences · Offre la plus complète' },
+    { key: 'ma',      label: 'Prix du marché', emoji: '📊', color: '#7c3aed', desc: 'MeilleursAgents · Prix/m² actuels' },
   ];
 
   return (
@@ -1487,7 +1484,8 @@ function MarcheImmobilier({ r, surfaceMin, nbChambres, styles }) {
       bienici:   `https://www.bienici.com/recherche/achat/${slug}-${cp}/maisonvilla?prix-max=${budgetMax}&prix-min=${budgetMin}&surface-min=${surfaceMin}&nb-pieces-min=${nbChambres+1}`,
       lbc:       `https://www.leboncoin.fr/recherche?category=9&real_estate_type=1&locations=${cp}&price=min-${budgetMax}&square=${surfaceMin}-max&rooms=${nbChambres+1}-max`,
       pap:       `https://www.pap.fr/annonce/vente-maisons-${slug}-g${communeSelectee.code}?prix-max=${budgetMax}&prix-min=${budgetMin}&surface-min=${surfaceMin}&nb-pieces-min=${nbChambres+1}`,
-      seloger:   `https://www.seloger.com/annonces/achat/maison/${slug}-${deptNum}/?idtt=2&naturebien=1&pxmax=${budgetMax}&pxmin=${budgetMin}&surfacemin=${surfaceMin}&nb_pieces_min=${nbChambres+1}`,
+      ma:        `https://www.meilleursagents.com/prix-immobilier/${slug}-${cp}/`,
+      seloger:   `https://www.seloger.com/list.htm?idtt=2&naturebien=1&zi=${cp}&pxmax=${budgetMax}&surfacemin=${surfaceMin}&nb_pieces_min=${nbChambres+1}`,
     };
   };
 
@@ -1500,6 +1498,7 @@ function MarcheImmobilier({ r, surfaceMin, nbChambres, styles }) {
     { key: 'lbc',     label: 'LeBonCoin', emoji: '🟠', color: '#f97316' },
     { key: 'pap',     label: 'PAP',       emoji: '📋', color: '#16a34a' },
     { key: 'seloger', label: 'SeLoger',   emoji: '🔵', color: '#0ea5e9' },
+    { key: 'ma',      label: 'MeilleursAgents', emoji: '📊', color: '#7c3aed' },
   ];
 
   return (
