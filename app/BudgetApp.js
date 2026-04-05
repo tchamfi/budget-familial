@@ -1027,13 +1027,18 @@ function RechercheRueDVF({ styles }) {
   };
 
   const choisirCommune = (commune) => {
-    setCommuneSelectee({ code: commune.code, nom: commune.nom, cp: commune.codesPostaux?.[0] || '' });
+    const c = { code: commune.code, nom: commune.nom, cp: commune.codesPostaux?.[0] || '' };
+    setCommuneSelectee(c);
     setCommuneInput(`${commune.nom} (${commune.departement?.nom || commune.codesPostaux?.[0] || ''})`);
     setCommuneSuggestions([]);
     setShowSuggestions(false);
     if (leafletMap.current) {
       fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(commune.nom)}&countrycodes=fr&limit=1&format=json`, { headers: { 'User-Agent': 'BudgetFamilialTchamfong/1.0' } })
         .then(r => r.json()).then(data => { if (data[0]) leafletMap.current.setView([parseFloat(data[0].lat), parseFloat(data[0].lon)], 14); }).catch(() => {});
+    }
+    // Si pas de rue saisie → lancer automatiquement la recherche historique (2014-2025)
+    if (!rue.trim()) {
+      lancerRecherche('', c);
     }
   };
 
@@ -1104,10 +1109,15 @@ function RechercheRueDVF({ styles }) {
   const lancerRecherche = async (nomRue, commune) => {
     const r = nomRue !== undefined ? nomRue : rue;
     const c = commune !== undefined ? commune : communeRef.current;
-    if (!r.trim() || !c) return;
+    if (!c) return;
     setLoading(true); setError(null); setResults(null); setActiveYear('all');
     try {
-      const res = await fetch(`/api/dvf?mode=rue&commune=${c.code}&rue=${encodeURIComponent(r.trim())}`);
+      // Si rue renseignée → mode rue (2020-2025 avec adresses)
+      // Si commune seule → mode historique (2014-2025 via Supabase + data.gouv.fr)
+      const url = r.trim()
+        ? `/api/dvf?mode=rue&commune=${c.code}&rue=${encodeURIComponent(r.trim())}`
+        : `/api/dvf?mode=historique&commune=${c.code}`;
+      const res = await fetch(url);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setResults(data);
@@ -1175,7 +1185,7 @@ function RechercheRueDVF({ styles }) {
               Commune {loadingSuggestions && <span style={{ color: '#c9a84c' }}>⏳</span>}
               {communeSelectee && <span style={{ color: '#16a34a', marginLeft: 4 }}>✓</span>}
             </label>
-            <input type="text" value={communeInput} onChange={e => rechercherCommunes(e.target.value)} onBlur={() => setTimeout(() => setShowSuggestions(false), 150)} onFocus={() => communeSuggestions.length > 0 && setShowSuggestions(true)} placeholder="Fontenay-sous-Bois, Lyon…" style={{ ...styles.input, width: '100%', paddingRight: 12, borderColor: communeSelectee ? '#16a34a' : undefined }}/>
+            <input type="text" value={communeInput} onChange={e => rechercherCommunes(e.target.value)} onKeyDown={e => e.key === 'Enter' && !communeSuggestions.length && communeSelectee && lancerRecherche(rue, communeSelectee)} onBlur={() => setTimeout(() => setShowSuggestions(false), 150)} onFocus={() => communeSuggestions.length > 0 && setShowSuggestions(true)} placeholder="Fontenay-sous-Bois, Lyon…" style={{ ...styles.input, width: '100%', paddingRight: 12, borderColor: communeSelectee ? '#16a34a' : undefined }}/>
             {showSuggestions && communeSuggestions.length > 0 && (
               <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000, background: '#fff', border: '1px solid #e8dcc8', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', marginTop: 4, overflow: 'hidden' }}>
                 {communeSuggestions.map((c, i) => (
