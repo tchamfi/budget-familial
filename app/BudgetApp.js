@@ -1037,10 +1037,7 @@ function RechercheRueDVF({ styles }) {
       fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(commune.nom)}&countrycodes=fr&limit=1&format=json`, { headers: { 'User-Agent': 'BudgetFamilialTchamfong/1.0' } })
         .then(r => r.json()).then(data => { if (data[0]) leafletMap.current.setView([parseFloat(data[0].lat), parseFloat(data[0].lon)], 14); }).catch(() => {});
     }
-    // Si pas de rue saisie → lancer automatiquement la recherche historique (2014-2025)
-    if (!rue.trim()) {
-      lancerRecherche('', c);
-    }
+    // Pas de recherche automatique — l'utilisateur doit cliquer sur le bouton de recherche
   };
 
   // Charger Leaflet
@@ -1198,7 +1195,7 @@ function RechercheRueDVF({ styles }) {
               Commune {loadingSuggestions && <span style={{ color: '#c9a84c' }}>⏳</span>}
               {communeSelectee && <span style={{ color: '#16a34a', marginLeft: 4 }}>✓</span>}
             </label>
-            <input type="text" value={communeInput} onChange={e => rechercherCommunes(e.target.value)} onKeyDown={e => e.key === 'Enter' && !communeSuggestions.length && communeSelectee && lancerRecherche(rue, communeSelectee)} onBlur={() => setTimeout(() => setShowSuggestions(false), 150)} onFocus={() => communeSuggestions.length > 0 && setShowSuggestions(true)} placeholder="Fontenay-sous-Bois, Lyon…" style={{ ...styles.input, width: '100%', paddingRight: 12, borderColor: communeSelectee ? '#16a34a' : undefined }}/>
+            <input type="text" value={communeInput} onChange={e => rechercherCommunes(e.target.value)} onBlur={() => setTimeout(() => setShowSuggestions(false), 150)} onFocus={() => communeSuggestions.length > 0 && setShowSuggestions(true)} placeholder="Fontenay-sous-Bois, Lyon…" style={{ ...styles.input, width: '100%', paddingRight: 12, borderColor: communeSelectee ? '#16a34a' : undefined }}/>
             {showSuggestions && communeSuggestions.length > 0 && (
               <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000, background: '#fff', border: '1px solid #e8dcc8', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', marginTop: 4, overflow: 'hidden' }}>
                 {communeSuggestions.map((c, i) => (
