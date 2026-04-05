@@ -392,7 +392,7 @@ export default function BudgetApp(){
   const bG={padding:"8px 16px",background:"transparent",color:"#8a8578",border:"1px solid #ddd8d0",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:500};
   const bD={padding:"5px 10px",background:"transparent",color:"#b91c1c",border:"1px solid #f5c6c6",borderRadius:7,cursor:"pointer",fontSize:10,fontWeight:600};
   const mB=(a)=>({padding:"7px 14px",border:a?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:a?700:400,background:a?"rgba(26,26,46,0.06)":"#fff",color:a?"#1a1a2e":"#8a8578"});
-  const tabs=[["dashboard","Tableau de bord"],["revenus","Revenus"],["charges","Charges"],["epargne","Épargne"],["objectifs","Objectifs"],["virements","Virements"],["impots","Simulateur IR"],["assistant","Assistant IA"],["alertes",`Alertes${alertCount>0?` (${alertCount})`:""}`],["immobilier","🏠 Immobilier"]];
+  const tabs=[["dashboard","Tableau de bord"],["revenus","Revenus"],["charges","Charges"],["epargne","Épargne"],["objectifs","Objectifs"],["virements","Virements"],["impots","Simulateur IR"],["assistant","Assistant IA"],["alertes",`Alertes${alertCount>0?` (${alertCount})`:""}`],["immobilier","🏠 Immobilier"],["marche","🔍 Marché"]];
   return(<><GlobalStyles/><div className="grain"/><div style={{minHeight:"100vh",background:"#faf9f7"}}>
     {saving&&<div className="fade-in" style={{position:"fixed",bottom:24,right:24,background:"#1a1a2e",color:"#faf9f7",padding:"10px 20px",borderRadius:12,fontSize:13,fontWeight:600,boxShadow:"0 8px 30px rgba(26,26,46,0.2)",zIndex:2000,display:"flex",alignItems:"center",gap:8}}><div style={{width:8,height:8,borderRadius:"50%",background:"#4ade80",animation:"pulse 1s infinite"}}/>Sauvegarde...</div>}
     <div style={{background:"#1a1a2e",padding:"0 max(16px,calc((100% - 1320px)/2 + 36px))",position:"sticky",top:0,zIndex:100}}><div className="header-inner">
@@ -429,6 +429,7 @@ export default function BudgetApp(){
     {tab==="impots"&&<div className="fade-up"><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:20}}>Simulateur Impôt sur le Revenu</h3><TaxSimulator/></div>}
     {tab==="assistant"&&<div className="fade-up" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:16}}>Assistant budgétaire IA</h3><AIAssistant revenus={revenus} charges={charges} chargesMontants={chargesMontants} epargne={epargne} epargneMontants={epargneMontants} objectifs={objectifs} annee={annee}/></div>}
     {tab==="alertes"&&<div className="fade-up"><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:16}}>Alertes {annee}</h3><Alerts revenus={revenus} chargesMontants={chargesMontants} epargneMontants={epargneMontants} annee={annee} mois={mois}/></div>}
+    {tab==="marche"&&<div className="fade-up"><MarcheImmobilierPage/></div>}
     {tab==="immobilier"&&<div className="fade-up">
       <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:28,paddingBottom:20,borderBottom:"1px solid #e8e4dd"}}>
         <div style={{width:48,height:48,background:"linear-gradient(135deg,#1a3a5c,#2d5986)",borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>🏠</div>
@@ -708,6 +709,8 @@ function SimulateurImmobilier() {
       )}
 
       {activeTab === 'transactions' && <RechercheRueDVF styles={styles}/>}
+
+      {activeTab === 'marche' && <MarcheImmobilier r={r} surfaceMin={surfaceMin} nbChambres={nbChambres} styles={styles}/>}
 
       {activeTab === 'villes' && <VillesDVF villes={VILLES} filterSecurite={filterSecurite} setFilterSecurite={setFilterSecurite} filterBudget={filterBudget} setFilterBudget={setFilterBudget} surfaceMin={surfaceMin} fmtFn={fmt} styles={styles} FormField={FormField} NumInput={NumInput} Card={Card}/>}
 
@@ -1193,6 +1196,366 @@ function RechercheRueDVF({ styles }) {
             importez les CSV DVF du Cerema dans Airtable (table <code>DVF_Transactions</code>)
             et activez l'option dans les paramètres de l'onglet.
           </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
+// ─── COMPOSANT MARCHÉ IMMOBILIER (onglet principal) ────────────────────────
+// Wrapper simple qui affiche le simulateur en mode marché
+function MarcheImmobilierPage() {
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 28, paddingBottom: 20, borderBottom: "1px solid #e8e4dd" }}>
+        <div style={{ width: 48, height: 48, background: "linear-gradient(135deg,#1a3a5c,#2d5986)", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>🔍</div>
+        <div>
+          <h2 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, color: "#1a1a2e", lineHeight: 1.2 }}>Marché immobilier</h2>
+          <p style={{ fontSize: 13, color: "#8a8578", marginTop: 2 }}>Annonces en vente · Vérifiez la correspondance avec votre budget depuis l&apos;onglet 🏠 Immobilier</p>
+        </div>
+      </div>
+      <MarcheAnnonces/>
+    </div>
+  );
+}
+
+// ─── COMPOSANT MARCHÉ ANNONCES ────────────────────────────────────────────
+function MarcheAnnonces() {
+  const [communeInput, setCommuneInput] = useState('Fontenay-sous-Bois');
+  const [communeSuggestions, setCommuneSuggestions] = useState([]);
+  const [communeSelectee, setCommuneSelectee] = useState({ code: '94033', nom: 'Fontenay-sous-Bois', cp: '94120', dept: '94' });
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [budgetMax, setBudgetMax] = useState(580000);
+  const [budgetMin, setBudgetMin] = useState(400000);
+  const [surfaceMin, setSurfaceMin] = useState(100);
+  const [pieces, setPieces] = useState(4);
+  const [dvfData, setDvfData] = useState(null);
+  const [dvfLoading, setDvfLoading] = useState(false);
+  const suggestTimer = useRef(null);
+
+  const rechercherCommunes = (val) => {
+    setCommuneInput(val);
+    setCommuneSelectee(null);
+    clearTimeout(suggestTimer.current);
+    if (val.length < 2) { setCommuneSuggestions([]); setShowSuggestions(false); return; }
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(val)}&fields=code,nom,codesPostaux,departement&limit=6&boost=population`);
+        const data = await res.json();
+        setCommuneSuggestions(data || []);
+        setShowSuggestions(true);
+      } catch {}
+    }, 250);
+  };
+
+  const choisirCommune = (c) => {
+    setCommuneSelectee({ code: c.code, nom: c.nom, cp: c.codesPostaux?.[0] || '', dept: c.departement?.code || c.code.slice(0, 2) });
+    setCommuneInput(`${c.nom} (${c.departement?.nom || c.codesPostaux?.[0] || ''})`);
+    setCommuneSuggestions([]);
+    setShowSuggestions(false);
+  };
+
+  // Charger le prix DVF de la commune pour comparaison
+  useEffect(() => {
+    if (!communeSelectee?.code) return;
+    setDvfLoading(true);
+    setDvfData(null);
+    fetch(`/api/dvf?mode=stats&commune=${communeSelectee.code}`)
+      .then(r => r.json())
+      .then(d => { setDvfData(d); setDvfLoading(false); })
+      .catch(() => setDvfLoading(false));
+  }, [communeSelectee?.code]);
+
+  // Fonction de génération d'URL pour chaque site
+  const buildUrls = () => {
+    if (!communeSelectee) return null;
+    const { nom, cp, dept, code } = communeSelectee;
+    const slug = nom.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const deptNum = dept || cp?.slice(0, 2) || '94';
+
+    return {
+      bienici: `https://www.bienici.com/recherche/achat/${slug}-${cp}/maisonvilla?prix-max=${budgetMax}&surface-min=${surfaceMin}&nb-pieces-min=${pieces}`,
+      lbc:     `https://www.leboncoin.fr/recherche?category=9&real_estate_type=1&locations=${cp}&price=min-${budgetMax}&square=${surfaceMin}-max&rooms=${pieces}-max`,
+      pap:     `https://www.pap.fr/annonce/vente-maisons-${slug}-g${code}?prix-max=${budgetMax}&surface-min=${surfaceMin}&nb-pieces-min=${pieces}`,
+      seloger: `https://www.seloger.com/annonces/achat/maison/${slug}-${deptNum}/?idtt=2&naturebien=1&pxmax=${budgetMax}&surfacemin=${surfaceMin}&nb_pieces_min=${pieces}`,
+      figaro:  `https://immobilier.lefigaro.fr/annonces/immobilier/vente/maison/?localisation=${encodeURIComponent(nom)}+%28${deptNum}%29&prix-max=${budgetMax}&surface-min=${surfaceMin}&nb-pieces=${pieces}`,
+      logicimmo: `https://www.logic-immo.com/vente-maison-${slug}-${cp},${cp}_2/options/groupprptypesids=1/pricemax=${budgetMax}/surfacemin=${surfaceMin}/piecemin=${pieces}`,
+    };
+  };
+
+  const urls = buildUrls();
+  const prixM2Estime = dvfData?.prix_m2_median;
+  const surfaceEstimee = prixM2Estime ? Math.round(budgetMax / prixM2Estime) : null;
+
+  const iS = { padding: '9px 14px', border: '1px solid #ddd8d0', borderRadius: 10, fontSize: 14, width: '100%', outline: 'none', background: '#faf9f7', fontFamily: "'DM Sans',sans-serif" };
+  const nS = { padding: '9px 14px', border: '1px solid #ddd8d0', borderRadius: 10, fontSize: 14, width: '100%', outline: 'none', background: '#faf9f7', fontFamily: "'DM Sans',sans-serif", textAlign: 'right' };
+
+  const SITES = [
+    { key: 'bienici',   label: "Bien'ici",   emoji: '🏠', color: '#2563eb', desc: 'Carte 3D · Agences + particuliers' },
+    { key: 'lbc',       label: 'LeBonCoin',  emoji: '🟠', color: '#f97316', desc: 'Particuliers · Résultats immédiats' },
+    { key: 'pap',       label: 'PAP',        emoji: '📋', color: '#16a34a', desc: 'Particulier à particulier · 0 frais agence' },
+    { key: 'seloger',   label: 'SeLoger',    emoji: '🔵', color: '#0ea5e9', desc: 'Agences · Plus complète en offres' },
+    { key: 'figaro',    label: 'Figaro Immo',emoji: '📰', color: '#7c3aed', desc: 'Agences · Biens premium' },
+    { key: 'logicimmo', label: 'Logic Immo', emoji: '🏡', color: '#0891b2', desc: 'Agences · Bon complément' },
+  ];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* ── Formulaire paramètres ── */}
+      <div style={{ background: '#fff', borderRadius: 16, padding: 24, border: '1px solid rgba(26,26,46,0.06)', boxShadow: '0 2px 12px rgba(26,26,46,0.04)' }}>
+        <h3 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 18, marginBottom: 18, color: '#1a1a2e' }}>🎯 Vos critères de recherche</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 14, alignItems: 'end' }}>
+
+          {/* Commune avec autocomplétion */}
+          <div style={{ position: 'relative' }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8a8578', marginBottom: 6, textTransform: 'uppercase' }}>
+              Commune {communeSelectee && <span style={{ color: '#16a34a' }}>✓</span>}
+            </label>
+            <input type="text" value={communeInput} onChange={e => rechercherCommunes(e.target.value)} onBlur={() => setTimeout(() => setShowSuggestions(false), 150)} onFocus={() => communeSuggestions.length > 0 && setShowSuggestions(true)} placeholder="Ville…" style={{ ...iS, borderColor: communeSelectee ? '#16a34a' : undefined }}/>
+            {showSuggestions && communeSuggestions.length > 0 && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000, background: '#fff', border: '1px solid #e8e4dd', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', marginTop: 4, overflow: 'hidden' }}>
+                {communeSuggestions.map((c, i) => (
+                  <div key={c.code} onMouseDown={() => choisirCommune(c)} style={{ padding: '9px 14px', cursor: 'pointer', fontSize: 13, borderBottom: i < communeSuggestions.length - 1 ? '1px solid #f2efeb' : 'none', display: 'flex', justifyContent: 'space-between' }} onMouseEnter={e => e.currentTarget.style.background = '#fef9f0'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                    <span style={{ fontWeight: 600 }}>{c.nom}</span>
+                    <span style={{ fontSize: 11, color: '#8a8578' }}>{c.codesPostaux?.[0]}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Budget */}
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8a8578', marginBottom: 6, textTransform: 'uppercase' }}>Budget max (€)</label>
+            <input type="number" value={budgetMax} onChange={e => setBudgetMax(+e.target.value)} step={10000} style={nS}/>
+          </div>
+
+          {/* Surface */}
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8a8578', marginBottom: 6, textTransform: 'uppercase' }}>Surface min (m²)</label>
+            <input type="number" value={surfaceMin} onChange={e => setSurfaceMin(+e.target.value)} style={nS}/>
+          </div>
+
+          {/* Pièces */}
+          <div>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#8a8578', marginBottom: 6, textTransform: 'uppercase' }}>Pièces min</label>
+            <select value={pieces} onChange={e => setPieces(+e.target.value)} style={{ ...iS, cursor: 'pointer' }}>
+              {[2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n} pièces</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Contexte marché (DVF) ── */}
+      {communeSelectee && (
+        <div style={{ background: 'linear-gradient(135deg,#1a3a5c,#2d5986)', borderRadius: 16, padding: 20, color: '#fff', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 11, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Commune</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#d4af37' }}>{communeSelectee.nom}</div>
+            <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>{communeSelectee.cp}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Prix DVF médian/m²</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#d4af37' }}>
+              {dvfLoading ? '...' : prixM2Estime ? `${prixM2Estime.toLocaleString('fr-FR')} €/m²` : 'N/A'}
+            </div>
+            <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>Maisons vendues 2022-2025</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Surface estimée</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: surfaceEstimee && surfaceEstimee >= surfaceMin ? '#4ade80' : '#f87171' }}>
+              {surfaceEstimee ? `~${surfaceEstimee} m²` : 'N/A'}
+            </div>
+            <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>Pour {budgetMax.toLocaleString('fr-FR')} €</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Faisabilité</div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>
+              {!prixM2Estime ? '—' :
+               surfaceEstimee >= surfaceMin ? '✅ Réaliste' :
+               surfaceEstimee >= surfaceMin * 0.8 ? '⚠️ Limite' : '❌ Sous critères'}
+            </div>
+            <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>
+              {prixM2Estime && surfaceEstimee < surfaceMin
+                ? `Manque ~${Math.round((surfaceMin - surfaceEstimee) * prixM2Estime / 1000)}k€`
+                : ''}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Grille des sites ── */}
+      {urls && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <h3 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 18, color: '#1a1a2e' }}>🔗 Voir les annonces maintenant</h3>
+            <span style={{ fontSize: 12, color: '#8a8578' }}>Filtres pré-remplis avec vos critères</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+            {SITES.map(site => (
+              <a key={site.key} href={urls[site.key]} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 18px', background: '#fff', border: `1px solid ${site.color}22`, borderLeft: `4px solid ${site.color}`, borderRadius: 12, textDecoration: 'none', transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}
+                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+                onMouseLeave={e => e.currentTarget.style.transform = 'none'}
+              >
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: `${site.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{site.emoji}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: site.color }}>{site.label}</div>
+                  <div style={{ fontSize: 11, color: '#8a8578', marginTop: 2 }}>{site.desc}</div>
+                  <div style={{ fontSize: 10, color: '#c4c0b8', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {budgetMax.toLocaleString('fr-FR')} € · {surfaceMin}m²+ · {pieces}p+
+                  </div>
+                </div>
+                <div style={{ fontSize: 16, color: site.color, flexShrink: 0 }}>→</div>
+              </a>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 14, padding: '12px 16px', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 10, fontSize: 12, color: '#92400e', display: 'flex', gap: 10 }}>
+            <span>💡</span>
+            <span>
+              <strong>Conseil :</strong> LeBonCoin et PAP proposent des biens de particuliers à particuliers (sans frais d'agence). 
+              Bien'ici et SeLoger agrègent agences + particuliers. Multipliez les sources pour ne rien rater.
+              Les filtres sont pré-remplis avec vos critères — vous arrivez directement sur les résultats.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Note budget simulateur ── */}
+      <div style={{ padding: '14px 18px', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 12, fontSize: 13, color: '#0369a1', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+        <span style={{ fontSize: 16 }}>🏠</span>
+        <span>
+          Pour voir votre <strong>budget d'achat calculé précisément</strong> (capacité d'emprunt, apport, mensualités),
+          rendez-vous dans l'onglet <strong>🏠 Immobilier → 📊 Simulation</strong>.
+          Ce budget est automatiquement repris dans les filtres des sites ci-dessus si vous passez par l'onglet Marché actuel du simulateur.
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── COMPOSANT MARCHÉ (onglet interne simulateur) ─────────────────────────
+function MarcheImmobilier({ r, surfaceMin, nbChambres, styles }) {
+  const [communeInput, setCommuneInput] = useState('Fontenay-sous-Bois');
+  const [communeSuggestions, setCommuneSuggestions] = useState([]);
+  const [communeSelectee, setCommuneSelectee] = useState({ code: '94033', nom: 'Fontenay-sous-Bois', cp: '94120', dept: '94' });
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [dvfData, setDvfData] = useState(null);
+  const suggestTimer = useRef(null);
+
+  // Budget depuis le simulateur
+  const budgetMax = Math.round(r.budgetNet);
+  const budgetMin = Math.round(r.budgetNet * 0.7);
+
+  const rechercherCommunes = (val) => {
+    setCommuneInput(val); setCommuneSelectee(null);
+    clearTimeout(suggestTimer.current);
+    if (val.length < 2) { setCommuneSuggestions([]); setShowSuggestions(false); return; }
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(val)}&fields=code,nom,codesPostaux,departement&limit=6&boost=population`);
+        const data = await res.json();
+        setCommuneSuggestions(data || []); setShowSuggestions(true);
+      } catch {}
+    }, 250);
+  };
+
+  const choisirCommune = (c) => {
+    setCommuneSelectee({ code: c.code, nom: c.nom, cp: c.codesPostaux?.[0] || '', dept: c.departement?.code || c.code.slice(0, 2) });
+    setCommuneInput(`${c.nom} (${c.departement?.nom || c.codesPostaux?.[0] || ''})`);
+    setCommuneSuggestions([]); setShowSuggestions(false);
+  };
+
+  useEffect(() => {
+    if (!communeSelectee?.code) return;
+    setDvfData(null);
+    fetch(`/api/dvf?mode=stats&commune=${communeSelectee.code}`)
+      .then(r => r.json()).then(setDvfData).catch(() => {});
+  }, [communeSelectee?.code]);
+
+  const buildUrls = () => {
+    if (!communeSelectee) return null;
+    const { nom, cp, dept } = communeSelectee;
+    const slug = nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const deptNum = dept || '94';
+    return {
+      bienici:   `https://www.bienici.com/recherche/achat/${slug}-${cp}/maisonvilla?prix-max=${budgetMax}&prix-min=${budgetMin}&surface-min=${surfaceMin}&nb-pieces-min=${nbChambres+1}`,
+      lbc:       `https://www.leboncoin.fr/recherche?category=9&real_estate_type=1&locations=${cp}&price=min-${budgetMax}&square=${surfaceMin}-max&rooms=${nbChambres+1}-max`,
+      pap:       `https://www.pap.fr/annonce/vente-maisons-${slug}-g${communeSelectee.code}?prix-max=${budgetMax}&prix-min=${budgetMin}&surface-min=${surfaceMin}&nb-pieces-min=${nbChambres+1}`,
+      seloger:   `https://www.seloger.com/annonces/achat/maison/${slug}-${deptNum}/?idtt=2&naturebien=1&pxmax=${budgetMax}&pxmin=${budgetMin}&surfacemin=${surfaceMin}&nb_pieces_min=${nbChambres+1}`,
+    };
+  };
+
+  const urls = buildUrls();
+  const prixM2 = dvfData?.prix_m2_median;
+  const surfaceEstimee = prixM2 ? Math.round(budgetMax / prixM2) : null;
+
+  const SITES = [
+    { key: 'bienici', label: "Bien'ici",  emoji: '🏠', color: '#2563eb' },
+    { key: 'lbc',     label: 'LeBonCoin', emoji: '🟠', color: '#f97316' },
+    { key: 'pap',     label: 'PAP',       emoji: '📋', color: '#16a34a' },
+    { key: 'seloger', label: 'SeLoger',   emoji: '🔵', color: '#0ea5e9' },
+  ];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 14, padding: 18 }}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c', marginBottom: 12 }}>🏘️ Annonces correspondant à votre budget simulateur</h3>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+            <input type="text" value={communeInput} onChange={e => rechercherCommunes(e.target.value)} onBlur={() => setTimeout(() => setShowSuggestions(false), 150)} onFocus={() => communeSuggestions.length > 0 && setShowSuggestions(true)} placeholder="Commune…" style={{ ...styles.input, width: '100%', paddingRight: 12, borderColor: communeSelectee ? '#16a34a' : undefined }}/>
+            {showSuggestions && communeSuggestions.length > 0 && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 1000, background: '#fff', border: '1px solid #e8dcc8', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', marginTop: 4, overflow: 'hidden' }}>
+                {communeSuggestions.map((c, i) => (
+                  <div key={c.code} onMouseDown={() => choisirCommune(c)} style={{ padding: '9px 14px', cursor: 'pointer', fontSize: 13, borderBottom: i < communeSuggestions.length - 1 ? '1px solid #f0ead8' : 'none', display: 'flex', justifyContent: 'space-between' }} onMouseEnter={e => e.currentTarget.style.background = '#fef9f0'} onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                    <span style={{ fontWeight: 600, color: '#1a3a5c' }}>{c.nom}</span>
+                    <span style={{ fontSize: 11, color: '#8a9ab0' }}>{c.codesPostaux?.[0]}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div style={{ fontSize: 13, color: '#5a7a9a', whiteSpace: 'nowrap' }}>
+            Budget : <strong style={{ color: '#c9a84c' }}>{budgetMin.toLocaleString('fr-FR')} — {budgetMax.toLocaleString('fr-FR')} €</strong>
+          </div>
+          <div style={{ fontSize: 13, color: '#5a7a9a', whiteSpace: 'nowrap' }}>
+            <strong>{surfaceMin} m²+</strong> · <strong>{nbChambres+1}p+</strong>
+          </div>
+        </div>
+
+        {/* Indicateur DVF */}
+        {prixM2 && (
+          <div style={{ marginTop: 12, display: 'flex', gap: 16, padding: '10px 14px', background: '#f9f5ee', borderRadius: 10, fontSize: 13, flexWrap: 'wrap' }}>
+            <span>📊 Prix DVF médian : <strong>{prixM2.toLocaleString('fr-FR')} €/m²</strong></span>
+            <span>→ Surface estimée : <strong style={{ color: surfaceEstimee >= surfaceMin ? '#16a34a' : '#dc2626' }}>{surfaceEstimee} m²</strong></span>
+            <span style={{ color: surfaceEstimee >= surfaceMin ? '#16a34a' : '#dc2626' }}>
+              {surfaceEstimee >= surfaceMin ? '✅ Budget cohérent' : `❌ Manque ~${Math.round((surfaceMin - surfaceEstimee) * prixM2 / 1000)}k€`}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Boutons sites */}
+      {urls && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {SITES.map(site => (
+            <a key={site.key} href={urls[site.key]} target="_blank" rel="noreferrer"
+               style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: '#fff', border: `2px solid ${site.color}33`, borderLeft: `4px solid ${site.color}`, borderRadius: 12, textDecoration: 'none', transition: 'transform 0.15s' }}
+               onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+               onMouseLeave={e => e.currentTarget.style.transform = 'none'}>
+              <span style={{ fontSize: 22 }}>{site.emoji}</span>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: site.color }}>{site.label}</div>
+                <div style={{ fontSize: 11, color: '#8a9ab0', marginTop: 1 }}>Filtres pré-remplis → cliquer pour voir</div>
+              </div>
+              <span style={{ marginLeft: 'auto', color: site.color, fontSize: 16 }}>→</span>
+            </a>
+          ))}
         </div>
       )}
     </div>
