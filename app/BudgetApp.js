@@ -711,8 +711,6 @@ function SimulateurImmobilier() {
 
       {activeTab === 'marche' && <MarcheImmobilier r={r} surfaceMin={surfaceMin} nbChambres={nbChambres} styles={styles}/>}
 
-      {activeTab === 'marche' && <MarcheImmobilier r={r} surfaceMin={surfaceMin} nbChambres={nbChambres} styles={styles}/>}
-
       <div style={styles.footer}>Simulation indicative • Données DVF Val-de-Marne 2024-2025 • Taux avril 2026 • Règles HCSF (35% max)</div>
     </div>
   );
