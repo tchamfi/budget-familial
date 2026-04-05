@@ -992,6 +992,7 @@ function RechercheRueDVF({ styles }) {
   const [viewMode, setViewMode] = useState('split');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeYear, setActiveYear] = useState('all'); // filtre année sur résultats
+  const [filterTexte, setFilterTexte] = useState(''); // filtre texte local sur résultats
 
   const leafletMap   = useRef(null);
   const markersLayer = useRef(null);
@@ -1110,7 +1111,7 @@ function RechercheRueDVF({ styles }) {
     const r = nomRue !== undefined ? nomRue : rue;
     const c = commune !== undefined ? commune : communeRef.current;
     if (!c) return;
-    setLoading(true); setError(null); setResults(null); setActiveYear('all');
+    setLoading(true); setError(null); setResults(null); setActiveYear('all'); setFilterTexte('');
     try {
       // Si rue renseignée → mode rue (2020-2025 avec adresses)
       // Si commune seule → mode historique (2014-2025 via Supabase + data.gouv.fr)
@@ -1128,9 +1129,21 @@ function RechercheRueDVF({ styles }) {
   const fmtLocal   = (n) => n ? Math.round(n).toLocaleString('fr-FR') + '\u00a0\u20ac' : '\u2014';
   const fmtM2Local = (n) => n ? Math.round(n).toLocaleString('fr-FR') + '\u00a0\u20ac/m\u00b2' : '\u2014';
 
-  // Données filtrées par année
+  // Données filtrées par année + texte libre
   const transactionsFiltrees = results
     ? (activeYear === 'all' ? results.transactions : results.transactions.filter(t => t.date?.startsWith(activeYear)))
+        .filter(t => {
+          if (!filterTexte.trim()) return true;
+          const q = filterTexte.trim().toLowerCase();
+          // Cherche dans adresse, commune, surface, prix, pièces
+          return (
+            (t.adresse?.toLowerCase().includes(q)) ||
+            (t.commune?.toLowerCase().includes(q)) ||
+            (t.surface?.toString().includes(q)) ||
+            (t.pieces?.toString().includes(q)) ||
+            (t.prix?.toString().includes(q))
+          );
+        })
     : [];
 
   const mediane = (() => {
@@ -1272,17 +1285,33 @@ function RechercheRueDVF({ styles }) {
         {/* Tableau */}
         {viewMode !== 'map' && (
           <div style={{ background: '#fffdf8', border: '1px solid #e8dcc8', borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid #e8dcc8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid #e8dcc8' }}>
               {results ? (
                 <>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>{results.rue} — {results.commune}</div>
-                    <div style={{ fontSize: 11, color: '#8a9ab0', marginTop: 2 }}>
-                      {transactionsFiltrees.length} vente{transactionsFiltrees.length > 1 ? 's' : ''}
-                      {activeYear !== 'all' ? ` en ${activeYear}` : ` (${results.nb} total)`}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#1a3a5c' }}>{results.rue || results.commune} — {results.commune}</div>
+                      <div style={{ fontSize: 11, color: '#8a9ab0', marginTop: 2 }}>
+                        {transactionsFiltrees.length} vente{transactionsFiltrees.length > 1 ? 's' : ''}
+                        {activeYear !== 'all' ? ` en ${activeYear}` : ` (${results.nb} total)`}
+                        {filterTexte.trim() && <span style={{ color: '#c9a84c', marginLeft: 6 }}>· filtre : "{filterTexte}"</span>}
+                      </div>
                     </div>
+                    {mediane && <div style={{ textAlign: 'right' }}><div style={{ fontSize: 10, color: '#8a9ab0', textTransform: 'uppercase', fontWeight: 600 }}>Prix médian</div><div style={{ fontSize: 18, fontWeight: 700, color: '#c9a84c' }}>{fmtM2Local(mediane)}</div></div>}
                   </div>
-                  {mediane && <div style={{ textAlign: 'right' }}><div style={{ fontSize: 10, color: '#8a9ab0', textTransform: 'uppercase', fontWeight: 600 }}>Prix médian</div><div style={{ fontSize: 18, fontWeight: 700, color: '#c9a84c' }}>{fmtM2Local(mediane)}</div></div>}
+                  {/* Filtre texte local — utile surtout pour les données 2014-2019 sans adresse */}
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      value={filterTexte}
+                      onChange={e => setFilterTexte(e.target.value)}
+                      placeholder="Filtrer par adresse, surface, prix, nb pièces…"
+                      style={{ flex: 1, padding: '7px 12px', border: '1px solid #e8dcc8', borderRadius: 8, fontSize: 12, outline: 'none', background: '#faf9f7', color: '#1a3a5c' }}
+                    />
+                    {filterTexte && (
+                      <button onClick={() => setFilterTexte('')} style={{ padding: '6px 10px', border: 'none', borderRadius: 8, background: '#f0ead8', cursor: 'pointer', fontSize: 12, color: '#8a9ab0', fontWeight: 600 }}>✕</button>
+                    )}
+                  </div>
                 </>
               ) : (
                 <div style={{ color: '#8a9ab0', fontSize: 13 }}>{loading ? 'Chargement…' : 'Sélectionnez une commune et cherchez une rue'}</div>
