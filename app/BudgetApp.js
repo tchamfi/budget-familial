@@ -709,7 +709,7 @@ function SimulateurImmobilier() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 16, fontWeight: 700, color: '#1a3a5c' }}>{fmt(r.mensMaxHCSF)}/mois</span>
                     <button
-                      onClick={() => setMensualiteSouhaitee(Math.round(r.mensMaxHCSF / 50) * 50)}
+                      onClick={() => setMensualiteSouhaitee(Math.round(r.mensMaxHCSF))}
                       style={{ padding: '5px 12px', background: '#1a3a5c', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}
                     >
                       Utiliser le max
@@ -722,7 +722,7 @@ function SimulateurImmobilier() {
                 type="range"
                 min={500}
                 max={Math.round(r.mensMaxHCSF)}
-                step={50}
+                step={1}
                 value={Math.min(mensualiteSouhaitee, Math.round(r.mensMaxHCSF))}
                 onChange={e => setMensualiteSouhaitee(+e.target.value)}
                 style={styles.slider}
@@ -733,10 +733,6 @@ function SimulateurImmobilier() {
                   {Math.round(mensualiteSouhaitee / r.mensMaxHCSF * 100)}% du max
                 </span>
                 <span>{fmt(r.mensMaxHCSF)}</span>
-              </div>
-              {/* Barre de progression visuelle */}
-              <div style={{ marginTop: 10, height: 6, borderRadius: 3, background: '#f0ead8', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${Math.min(mensualiteSouhaitee / r.mensMaxHCSF * 100, 100)}%`, background: mensualiteSouhaitee >= r.mensMaxHCSF * 0.95 ? 'linear-gradient(90deg,#16a34a,#22c55e)' : 'linear-gradient(90deg,#1a3a5c,#c9a84c)', borderRadius: 3, transition: 'width 0.2s' }}/>
               </div>
               <p style={{ fontSize: 11, color: '#8a9ab0', marginTop: 10 }}>
                 Règle HCSF : max 35% du revenu brut avant PAS • Revenu brut estimé : {fmt(r.revAvantPAS)}/mois
