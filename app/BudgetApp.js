@@ -649,7 +649,7 @@ function SimulateurImmobilier() {
   const [surfaceMin,  setSurfaceMin]  = useState(100);
   const [nbChambres,  setNbChambres]  = useState(4);
   const [vendMaison,          setVendMaison]          = useState(true);
-  const [modeCalc,            setModeCalc]            = useState('auto');
+  // modeCalc supprimé — mode unique : mensualité choisie
   const [mensualiteSouhaitee, setMensualiteSouhaitee] = useState(2500);
   const [filterSecurite, setFilterSecurite] = useState(4);
   const [filterBudget,   setFilterBudget]   = useState(600000);
@@ -667,7 +667,7 @@ function SimulateurImmobilier() {
     const apportTotal = apportPerso + soldeVente;
     let mensDisponible = mensMaxHCSF;
     if (!vendMaison) mensDisponible = mensMaxHCSF - mensActuelle;
-    const mensualiteUtilisee = modeCalc === 'mensualite' ? Math.min(mensualiteSouhaitee, mensDisponible) : mensDisponible;
+    const mensualiteUtilisee = Math.min(mensualiteSouhaitee, mensDisponible);
     const taux     = TAUX[duree];
     const capacite = calcCapacite(mensualiteUtilisee, taux, duree);
     const budgetTotal = capacite + apportTotal;
@@ -678,7 +678,7 @@ function SimulateurImmobilier() {
     const coutCredit  = mensFinal * duree * 12 - emprunt;
     const resteAVivre = revTotal - mensFinal - (vendMaison ? 0 : mensActuelle) - chargesFixes;
     return { revTotal, revAvantPAS, mensMaxHCSF, soldeVente, fraisAgence, ira, apportTotal, mensualiteUtilisee, mensDisponible, taux, capacite, budgetTotal, budgetNet, emprunt, mensFinal, endett, coutCredit, resteAVivre };
-  }, [revLionel, revOphelie, tauxPAS, chargesFixes, apportPerso, mensActuelle, crd, prixVente, duree, vendMaison, modeCalc, mensualiteSouhaitee]);
+  }, [revLionel, revOphelie, tauxPAS, chargesFixes, apportPerso, mensActuelle, crd, prixVente, duree, vendMaison, mensualiteSouhaitee]);
 
   const r = calc();
 
@@ -687,7 +687,6 @@ function SimulateurImmobilier() {
       <div style={styles.headerBadges}>
         <span style={styles.badge('#d4af37', '#7a5c00')}>🏦 Taux {TAUX[duree].toFixed(2)}%</span>
         <span style={styles.badge(r.endett <= 25 ? '#d1fae5' : r.endett <= 35 ? '#fef3c7' : '#fee2e2', r.endett <= 25 ? '#065f46' : r.endett <= 35 ? '#92400e' : '#991b1b')}>Endettement {r.endett.toFixed(1)}%</span>
-        <span style={styles.badge('#e0e7ff', '#3730a3')}>Mode {modeCalc === 'auto' ? 'Auto HCSF' : 'Manuel'}</span>
       </div>
       <div style={styles.tabs}>
         {[{ id: 'simulation', label: '📊 Simulation' }, { id: 'scenarios', label: '⚖️ Scénarios' }, { id: 'transactions', label: '🔍 Transactions DVF' }, { id: 'marche', label: '🔍 Marché & Annonces' }].map(t => (
@@ -698,18 +697,50 @@ function SimulateurImmobilier() {
       {activeTab === 'simulation' && (
         <div style={styles.simGrid}>
           <div>
-            <Card title="⚙️ Mode de calcul">
-              <div style={styles.modeToggle}>
-                {['auto', 'mensualite'].map(m => (<button key={m} onClick={() => setModeCalc(m)} style={modeCalc === m ? styles.modeBtnActive : styles.modeBtn}>{m === 'auto' ? 'Auto (HCSF max)' : 'Je choisis ma mensualité'}</button>))}
-              </div>
-              {modeCalc === 'mensualite' && (
-                <div style={styles.sliderBox}>
-                  <div style={styles.sliderHeader}><span style={{ fontSize: 13, fontWeight: 600, color: '#1a3a5c' }}>Mensualité souhaitée</span><span style={{ fontSize: 18, fontWeight: 700, color: '#c9a84c' }}>{fmt(mensualiteSouhaitee)}/mois</span></div>
-                  <input type="range" min={500} max={Math.round(r.mensMaxHCSF)} step={50} value={mensualiteSouhaitee} onChange={e => setMensualiteSouhaitee(+e.target.value)} style={styles.slider}/>
-                  <div style={styles.sliderLabels}><span>500 €</span><span>Max HCSF : {fmt(r.mensMaxHCSF)}</span></div>
+            <Card title="⚙️ Mensualité souhaitée">
+              {/* En-tête : valeur actuelle + badge max */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div>
+                  <span style={{ fontSize: 28, fontWeight: 800, color: '#c9a84c', fontFamily: "'DM Serif Display',serif" }}>{fmt(mensualiteSouhaitee)}</span>
+                  <span style={{ fontSize: 14, color: '#8a9ab0', marginLeft: 6 }}>/mois</span>
                 </div>
-              )}
-              {modeCalc === 'auto' && <p style={{ fontSize: 12, color: '#8a9ab0', marginTop: 8 }}>Budget calculé selon la règle HCSF (35 % max d&apos;endettement)</p>}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                  <span style={{ fontSize: 11, color: '#8a9ab0', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.04em' }}>Max HCSF (35%)</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: '#1a3a5c' }}>{fmt(r.mensMaxHCSF)}/mois</span>
+                    <button
+                      onClick={() => setMensualiteSouhaitee(Math.round(r.mensMaxHCSF / 50) * 50)}
+                      style={{ padding: '5px 12px', background: '#1a3a5c', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}
+                    >
+                      Utiliser le max
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {/* Slider */}
+              <input
+                type="range"
+                min={500}
+                max={Math.round(r.mensMaxHCSF)}
+                step={50}
+                value={Math.min(mensualiteSouhaitee, Math.round(r.mensMaxHCSF))}
+                onChange={e => setMensualiteSouhaitee(+e.target.value)}
+                style={styles.slider}
+              />
+              <div style={styles.sliderLabels}>
+                <span>500 €</span>
+                <span style={{ color: mensualiteSouhaitee >= r.mensMaxHCSF * 0.95 ? '#16a34a' : '#8a9ab0' }}>
+                  {Math.round(mensualiteSouhaitee / r.mensMaxHCSF * 100)}% du max
+                </span>
+                <span>{fmt(r.mensMaxHCSF)}</span>
+              </div>
+              {/* Barre de progression visuelle */}
+              <div style={{ marginTop: 10, height: 6, borderRadius: 3, background: '#f0ead8', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${Math.min(mensualiteSouhaitee / r.mensMaxHCSF * 100, 100)}%`, background: mensualiteSouhaitee >= r.mensMaxHCSF * 0.95 ? 'linear-gradient(90deg,#16a34a,#22c55e)' : 'linear-gradient(90deg,#1a3a5c,#c9a84c)', borderRadius: 3, transition: 'width 0.2s' }}/>
+              </div>
+              <p style={{ fontSize: 11, color: '#8a9ab0', marginTop: 10 }}>
+                Règle HCSF : max 35% du revenu brut avant PAS • Revenu brut estimé : {fmt(r.revAvantPAS)}/mois
+              </p>
             </Card>
             <Card title="💰 Revenus du foyer">
               <div style={styles.formGrid}>
