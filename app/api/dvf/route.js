@@ -1,10 +1,39 @@
 // app/api/dvf/route.js
-// Source unique : tabular-api.data.gouv.fr — DVF géolocalisé 2014→2025 (DGFiP/Etalab)
-// Resource ID d7933994 = fichier unique couvrant toutes les années depuis 2014
-// Supabase gardé uniquement pour le mode 'stats' (médiane historique)
+// Sources DVF :
+//   2020-2025 → resource d7933994 (DVF géolocalisé Etalab, mis à jour semestriellement)
+//   2014-2019 → resources par année (DVF brut DGFiP via cadastre.data.gouv.fr)
+// Supabase gardé en fallback pour les stats historiques
 
-const DVF_RESOURCE  = 'd7933994-2c66-4131-a4da-cf7cd18040a4';
-const TABULAR_BASE  = `https://tabular-api.data.gouv.fr/api/resources/${DVF_RESOURCE}/data/`;
+const TABULAR_BASE = 'https://tabular-api.data.gouv.fr/api/resources';
+
+// Resource ID du fichier géolocalisé 2020→ (adresses + lat/lng)
+const DVF_RECENT = 'd7933994-2c66-4131-a4da-cf7cd18040a4';
+
+// Resource IDs des fichiers bruts par année 2014-2019 (adresses, pas de lat/lng)
+// Source : cadastre.data.gouv.fr/dvf
+const DVF_PAR_ANNEE = {
+  '2019': '3004168d-bec4-44d9-a781-ef16f41856a2',
+  '2018': '1be77ca5-dc1b-4e50-af2b-0240147e0346',
+  '2017': '7161c9f2-3d91-4caf-afa2-cfe535807f04',
+  '2016': '0ab442c5-57d1-4139-92dd-266bded72d42',
+  '2015': 'f4ca5ea2-a329-4df5-b9ae-b6b5c87f7713',
+  '2014': '463b6c72-8e75-4ad4-a49e-a64e19c1406e',
+};
+
+// Colonnes DVF brut (différentes du fichier géolocalisé)
+const COL_BRUT = {
+  commune:  'code_commune',
+  voie:     'adresse_nom_voie',
+  type:     'type_local',
+  nature:   'nature_mutation',
+  date:     'date_mutation',
+  prix:     'valeur_fonciere',
+  surface:  'surface_reelle_bati',
+  pieces:   'nombre_pieces_principales',
+  terrain:  'surface_terrain',
+  lat:      'latitude',
+  lng:      'longitude',
+};
 const SUPABASE_URL  = process.env.SUPABASE_URL;
 const SUPABASE_KEY  = process.env.SUPABASE_ANON_KEY;
 
@@ -23,74 +52,96 @@ const COMMUNES_94 = {
 
 // ─── DVF tabular API (2014-2025, avec adresses) ───────────────────────────────
 
-async function fetchDVF({ commune, rue, dateMin, dateMax, pageSize = 200 }) {
+// Fetch depuis le fichier géolocalisé récent (2020→, avec lat/lng)
+async function fetchDVFRecent({ commune, rue, dateMin, pageSize = 200 }) {
   const params = new URLSearchParams({
     'code_commune__exact': commune,
     'type_local__exact':   'Maison',
     'date_mutation__sort': 'desc',
-    'page_size': String(Math.min(pageSize, 200)),
+    'page_size':           String(Math.min(pageSize, 200)),
   });
+  if (rue) params.set('adresse_nom_voie__contains', rue.toUpperCase().trim());
+  if (dateMin) params.set('date_mutation__greater', dateMin);
 
-  // Filtre par rue si fourni
-  if (rue) {
-    params.set('adresse_nom_voie__contains', rue.toUpperCase().trim());
-  }
-  // Filtre date min si fourni (ex: "2014-01-01")
-  if (dateMin) {
-    params.set('date_mutation__greater', dateMin);
-  }
-  // Filtre date max si fourni (ex: "2019-12-31")
-  if (dateMax) {
-    params.set('date_mutation__less', dateMax);
-  }
-
-  const fullUrl = `${TABULAR_BASE}?${params}`;
-  console.log('[DVF] fetch:', fullUrl);
-
-  const res = await fetch(fullUrl, {
-    headers: { 'Accept': 'application/json' },
-    signal: AbortSignal.timeout(20000),
-  });
-
-  if (!res.ok) {
-    const txt = await res.text().catch(() => '');
-    console.error('[DVF] erreur', res.status, txt.slice(0, 300));
-    throw new Error(`DVF API ${res.status}: ${txt.slice(0, 100)}`);
-  }
+  const url = `${TABULAR_BASE}/${DVF_RECENT}/data/?${params}`;
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(15000) });
+  if (!res.ok) { console.error('[DVF recent]', res.status, await res.text().catch(()=>'')); return []; }
   const json = await res.json();
-  console.log('[DVF] nb résultats bruts:', json.data?.length, '| total:', json.meta?.total, '| dateMin:', dateMin, '| dateMax:', dateMax);
-  // Log des dates min/max des résultats pour vérifier le filtrage
-  if (json.data?.length > 0) {
-    const dates = json.data.map(t => t.date_mutation).filter(Boolean).sort();
-    console.log('[DVF] date min résultat:', dates[0], '| date max résultat:', dates[dates.length-1]);
-  }
+  console.log('[DVF recent] résultats:', json.data?.length, '| total:', json.meta?.total);
 
-  // Filtrer : surface > 0, prix réaliste, dédoublonner par id_mutation
   const seen = new Set();
   return (json.data || [])
-    .filter(t =>
-      parseFloat(t.surface_reelle_bati) > 0 &&
-      parseFloat(t.valeur_fonciere) > 10000 &&
-      !seen.has(t.id_mutation) && seen.add(t.id_mutation)
-    )
+    .filter(t => parseFloat(t.surface_reelle_bati) > 0 && parseFloat(t.valeur_fonciere) > 10000
+      && !seen.has(t.id_mutation) && seen.add(t.id_mutation))
     .map(t => {
       const surface = parseFloat(t.surface_reelle_bati);
       const prix    = Math.round(parseFloat(t.valeur_fonciere));
       return {
-        date:    t.date_mutation,
+        date: t.date_mutation,
         adresse: [t.adresse_numero, t.adresse_suffixe, t.adresse_nom_voie].filter(Boolean).join(' '),
-        prix,
-        surface,
+        prix, surface,
         pieces:  parseInt(t.nombre_pieces_principales) || null,
         terrain: parseFloat(t.surface_terrain) || null,
         prixM2:  surface > 0 ? Math.round(prix / surface) : null,
-        lat:     parseFloat(t.latitude)  || null,
-        lng:     parseFloat(t.longitude) || null,
+        lat: parseFloat(t.latitude) || null, lng: parseFloat(t.longitude) || null,
         commune: t.nom_commune || COMMUNES_94[commune] || commune,
-        source:  `DVF data.gouv.fr ${t.date_mutation?.slice(0, 4) || ''}`,
+        source: `DVF data.gouv.fr ${t.date_mutation?.slice(0, 4) || ''}`,
       };
     });
 }
+
+// Fetch depuis un fichier brut par année (2014-2019, avec adresses mais sans lat/lng)
+async function fetchDVFAnnee(annee, { commune, rue, pageSize = 200 }) {
+  const rid = DVF_PAR_ANNEE[String(annee)];
+  if (!rid) return [];
+
+  const params = new URLSearchParams({
+    'code_commune__exact':    commune,
+    'type_local__exact':      'Maison',
+    'nature_mutation__exact': 'Vente',
+    'date_mutation__sort':    'desc',
+    'page_size':              String(Math.min(pageSize, 200)),
+  });
+  if (rue) params.set('adresse_nom_voie__contains', rue.toUpperCase().trim());
+
+  const url = `${TABULAR_BASE}/${rid}/data/?${params}`;
+  console.log(`[DVF ${annee}] fetch:`, url);
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(15000) });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    console.error(`[DVF ${annee}] erreur ${res.status}:`, txt.slice(0, 200));
+    return [];
+  }
+  const json = await res.json();
+  console.log(`[DVF ${annee}] résultats:`, json.data?.length, '| total:', json.meta?.total);
+
+  return (json.data || [])
+    .filter(t => parseFloat(t.surface_reelle_bati) > 0 && parseFloat(t.valeur_fonciere) > 10000)
+    .map(t => {
+      const surface = parseFloat(t.surface_reelle_bati);
+      const prix    = Math.round(parseFloat(t.valeur_fonciere));
+      return {
+        date: t.date_mutation,
+        adresse: [t.adresse_numero, t.adresse_suffixe, t.adresse_nom_voie].filter(Boolean).join(' '),
+        prix, surface,
+        pieces:  parseInt(t.nombre_pieces_principales) || null,
+        terrain: parseFloat(t.surface_terrain) || null,
+        prixM2:  surface > 0 ? Math.round(prix / surface) : null,
+        lat: null, lng: null,
+        commune: t.nom_commune || COMMUNES_94[commune] || commune,
+        source: `DVF data.gouv.fr ${annee}`,
+      };
+    });
+}
+
+// Fetch toutes les années historiques en parallèle
+async function fetchDVFHistorique({ commune, rue }) {
+  const annees = ['2019', '2018', '2017', '2016', '2015', '2014'];
+  const results = await Promise.all(annees.map(a => fetchDVFAnnee(a, { commune, rue })));
+  return results.flat();
+}
+
 
 // ─── Supabase (médiane historique uniquement) ─────────────────────────────────
 
@@ -141,8 +192,8 @@ export async function GET(request) {
       // - 2020-2025 : données récentes (tri desc, les plus récentes d'abord)
       // - 2014-2019 : données historiques (même rue, même commune)
       const [recent, ancien] = await Promise.all([
-        fetchDVF({ commune, rue, dateMin: '2020-01-01', pageSize: 200 }),
-        fetchDVF({ commune, rue, dateMin: '2014-01-01', dateMax: '2019-12-31', pageSize: 200 }),
+        fetchDVFRecent({ commune, rue, dateMin: '2020-01-01' }),
+        fetchDVFHistorique({ commune, rue }),
       ]);
 
       const transactions = [...recent, ...ancien]
@@ -165,8 +216,8 @@ export async function GET(request) {
       // Fetch 2014-2019 et 2020-2025 en parallèle (deux requêtes pour contourner
       // la limite de page_size=500 sur une grande plage)
       const [recent, ancien] = await Promise.all([
-        fetchDVF({ commune, dateMin: '2020-01-01', pageSize: 200 }),
-        fetchDVF({ commune, dateMin: '2014-01-01', dateMax: '2019-12-31', pageSize: 200 }),
+        fetchDVFRecent({ commune, dateMin: '2020-01-01' }),
+        fetchDVFHistorique({ commune, rue: null }),
       ]);
 
       const all = [...recent, ...ancien].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -207,7 +258,7 @@ export async function GET(request) {
     // ── MODE STATS : prix médian commune ─────────────────────────────────────
     if (mode === 'stats') {
       const [recent, histo] = await Promise.all([
-        fetchDVF({ commune, dateMin: '2023-01-01', pageSize: 200 }),
+        fetchDVFRecent({ commune, dateMin: '2023-01-01' }),
         fetchSupabaseStats(commune),
       ]);
 
