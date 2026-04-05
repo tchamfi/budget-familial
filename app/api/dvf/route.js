@@ -1,12 +1,12 @@
 // app/api/dvf/route.js
-// Sources mergées :
-//   2014-2019 → Supabase (PostgreSQL)
-//   2020-2025 → tabular-api.data.gouv.fr (DGFiP)
+// Source unique : tabular-api.data.gouv.fr — DVF géolocalisé 2014→2025 (DGFiP/Etalab)
+// Resource ID d7933994 = fichier unique couvrant toutes les années depuis 2014
+// Supabase gardé uniquement pour le mode 'stats' (médiane historique)
 
 const DVF_RESOURCE  = 'd7933994-2c66-4131-a4da-cf7cd18040a4';
 const TABULAR_BASE  = `https://tabular-api.data.gouv.fr/api/resources/${DVF_RESOURCE}/data/`;
-const SUPABASE_URL  = process.env.SUPABASE_URL;   // ex: https://caktmsnjvkqyrykxkayb.supabase.co
-const SUPABASE_KEY  = process.env.SUPABASE_ANON_KEY; // clé publishable (lecture seule)
+const SUPABASE_URL  = process.env.SUPABASE_URL;
+const SUPABASE_KEY  = process.env.SUPABASE_ANON_KEY;
 
 const COMMUNES_94 = {
   '94067': 'Saint-Mandé',         '94080': 'Vincennes',
@@ -21,95 +21,45 @@ const COMMUNES_94 = {
   '94028': 'Créteil',
 };
 
-// ─── SUPABASE : données 2014-2019 ────────────────────────────────────────────
+// ─── DVF tabular API (2014-2025, avec adresses) ───────────────────────────────
 
-async function fetchSupabase(commune, dateMin = '2014-01-01', dateMax = '2019-12-31', limit = 500) {
-  if (!SUPABASE_URL || !SUPABASE_KEY) return [];
-
-  const url = new URL(`${SUPABASE_URL}/rest/v1/dvf_transactions`);
-  url.searchParams.set('commune_code', `eq.${commune}`);
-  url.searchParams.set('date_mutation', `gte.${dateMin}`);
-  // On ajoute aussi un filtre date_mutation <= dateMax
-  url.searchParams.set('and', `(date_mutation.lte.${dateMax})`);
-  url.searchParams.set('order', 'date_mutation.desc');
-  url.searchParams.set('limit', String(limit));
-  url.searchParams.set('select', 'date_mutation,prix,surface,pieces,terrain,dept,commune_nom');
-
-  // Correction : Supabase utilise des paramètres séparés pour les filtres
-  // On reconstruit proprement
-  const params = new URLSearchParams({
-    'commune_code': `eq.${commune}`,
-    'date_mutation': `gte.${dateMin}`,
-    'order': 'date_mutation.desc',
-    'limit': String(limit),
-    'select': 'date_mutation,prix,surface,pieces,terrain,dept,commune_nom',
-  });
-
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/dvf_transactions?${params}`, {
-    headers: {
-      'apikey':        SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Accept':        'application/json',
-    },
-    signal: AbortSignal.timeout(10000),
-  });
-
-  if (!res.ok) {
-    console.error('Supabase error:', res.status, await res.text().catch(() => ''));
-    return [];
-  }
-
-  const data = await res.json();
-  // Filtrer côté client la borne haute de date (Supabase ne supporte pas 2 filtres sur la même colonne via query params)
-  return (data || [])
-    .filter(r => r.date_mutation <= dateMax)
-    .map(r => ({
-      date:    r.date_mutation,
-      adresse: null,   // pas disponible dans Cerema DVF+
-      prix:    r.prix,
-      surface: r.surface,
-      pieces:  r.pieces,
-      terrain: r.terrain,
-      prixM2:  r.surface > 0 ? Math.round(r.prix / r.surface) : null,
-      lat:     null,   // pas dans ce format
-      lng:     null,
-      commune: r.commune_nom || COMMUNES_94[commune] || commune,
-      source:  'DVF Cerema 2014-2019',
-    }));
-}
-
-// ─── DATA.GOUV.FR : données 2020-2025 ────────────────────────────────────────
-
-async function fetchDataGouv(commune, mode = 'rue', rue = null) {
+async function fetchDVF({ commune, rue, dateMin, dateMax, pageSize = 500 }) {
   const params = new URLSearchParams({
     'code_commune__exact': commune,
     'type_local__exact':   'Maison',
     'date_mutation__sort': 'desc',
-    'page_size':           '200',
+    'page_size':           String(pageSize),
   });
 
-  if (mode === 'rue' && rue) {
+  // Filtre par rue si fourni
+  if (rue) {
     params.set('adresse_nom_voie__contains', rue.toUpperCase().trim());
+  }
+  // Filtre date min si fourni (ex: "2014-01-01")
+  if (dateMin) {
+    params.set('date_mutation__greater_equal', dateMin);
+  }
+  // Filtre date max si fourni (ex: "2019-12-31")
+  if (dateMax) {
+    params.set('date_mutation__less_equal', dateMax);
   }
 
   const res = await fetch(`${TABULAR_BASE}?${params}`, {
     headers: { 'Accept': 'application/json' },
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(20000),
   });
 
-  if (!res.ok) throw new Error(`data.gouv.fr ${res.status}`);
-
+  if (!res.ok) throw new Error(`DVF API ${res.status}`);
   const json = await res.json();
-  const valides = (json.data || []).filter(t =>
-    t.type_local === 'Maison' &&
-    parseFloat(t.surface_reelle_bati) > 0 &&
-    parseFloat(t.valeur_fonciere) > 10000
-  );
 
-  // Dédoublonnage par id_mutation
+  // Filtrer : surface > 0, prix réaliste, dédoublonner par id_mutation
   const seen = new Set();
-  return valides
-    .filter(t => { if (seen.has(t.id_mutation)) return false; seen.add(t.id_mutation); return true; })
+  return (json.data || [])
+    .filter(t =>
+      parseFloat(t.surface_reelle_bati) > 0 &&
+      parseFloat(t.valeur_fonciere) > 10000 &&
+      !seen.has(t.id_mutation) && seen.add(t.id_mutation)
+    )
     .map(t => {
       const surface = parseFloat(t.surface_reelle_bati);
       const prix    = Math.round(parseFloat(t.valeur_fonciere));
@@ -124,27 +74,57 @@ async function fetchDataGouv(commune, mode = 'rue', rue = null) {
         lat:     parseFloat(t.latitude)  || null,
         lng:     parseFloat(t.longitude) || null,
         commune: t.nom_commune || COMMUNES_94[commune] || commune,
-        source:  'DVF data.gouv.fr 2020-2025',
+        source:  `DVF data.gouv.fr ${t.date_mutation?.slice(0, 4) || ''}`,
       };
     });
+}
+
+// ─── Supabase (médiane historique uniquement) ─────────────────────────────────
+
+async function fetchSupabaseStats(commune) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return [];
+  const params = new URLSearchParams({
+    'commune_code': `eq.${commune}`,
+    'order':        'date_mutation.desc',
+    'limit':        '500',
+    'select':       'date_mutation,prix,surface,pieces,terrain',
+  });
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/dvf_transactions?${params}`, {
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) return [];
+  return (await res.json()) || [];
+}
+
+// ─── Utilitaires ──────────────────────────────────────────────────────────────
+
+function mediane(arr) {
+  if (!arr.length) return null;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
+    : Math.round(sorted[mid]);
 }
 
 // ─── HANDLER ─────────────────────────────────────────────────────────────────
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const mode    = searchParams.get('mode') || 'stats';
+  const mode    = searchParams.get('mode') || 'rue';
   const commune = searchParams.get('commune');
   const rue     = searchParams.get('rue');
 
   if (!commune) return Response.json({ error: 'commune requis' }, { status: 400 });
 
   try {
-    // ── MODE RUE : recherche par voie (2020-2025 uniquement — adresse non dispo dans Cerema) ──
+
+    // ── MODE RUE : recherche par voie 2014-2025 ───────────────────────────────
     if (mode === 'rue') {
       if (!rue) return Response.json({ error: 'rue requis' }, { status: 400 });
 
-      const transactions = await fetchDataGouv(commune, 'rue', rue);
+      const transactions = await fetchDVF({ commune, rue, pageSize: 500 });
       transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
 
       return Response.json({
@@ -153,113 +133,82 @@ export async function GET(request) {
         rue: rue.toUpperCase().trim(),
         nb: transactions.length,
         transactions,
-        source: 'DVF data.gouv.fr 2020-2025 (adresses non disponibles sur 2014-2019)',
+        source: 'DVF data.gouv.fr 2014-2025 (DGFiP/Etalab)',
       }, { headers: { 'Cache-Control': 'public, max-age=3600' } });
     }
 
-    // ── MODE STATS : prix médian toutes années confondues ─────────────────────
-    if (mode === 'stats') {
-      // Fetch en parallèle les deux sources
-      const [recents, historiques] = await Promise.all([
-        fetchDataGouv(commune, 'stats'),
-        fetchSupabase(commune, '2014-01-01', '2019-12-31', 500),
-      ]);
-
-      // Pour les stats on filtre à 2 ans sur la source récente
-      const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 2);
-      const recentsFiltered = recents.filter(t => new Date(t.date) >= cutoff);
-
-      // Médiane prix/m² sur les 2 dernières années (source récente)
-      const prixM2Recents = recentsFiltered
-        .map(t => t.prixM2)
-        .filter(p => p && p > 1000 && p < 20000)
-        .sort((a, b) => a - b);
-
-      // Médiane prix/m² sur 2014-2019 (source historique)
-      const prixM2Histo = historiques
-        .map(t => t.prixM2)
-        .filter(p => p && p > 1000 && p < 20000)
-        .sort((a, b) => a - b);
-
-      const mediane = (arr) => {
-        if (!arr.length) return null;
-        const mid = Math.floor(arr.length / 2);
-        return arr.length % 2 === 0
-          ? Math.round((arr[mid-1] + arr[mid]) / 2)
-          : Math.round(arr[mid]);
-      };
-
-      return Response.json({
-        mode: 'stats',
-        commune: COMMUNES_94[commune] || commune,
-        prix_m2_median:        mediane(prixM2Recents),
-        prix_m2_median_histo:  mediane(prixM2Histo),
-        nb_transactions:       recentsFiltered.length,
-        nb_transactions_histo: historiques.length,
-        source_recente:        'DVF data.gouv.fr 2023-2025',
-        source_historique:     'DVF Cerema 2014-2019 (Supabase)',
-      }, { headers: { 'Cache-Control': 'public, max-age=86400' } });
-    }
-
-    // ── MODE HISTORIQUE : toutes les transactions 2014-2025 ──────────────────
+    // ── MODE HISTORIQUE : toutes les transactions 2014-2025 ───────────────────
     if (mode === 'historique') {
-      const [recents, historiques] = await Promise.all([
-        fetchDataGouv(commune, 'stats'),
-        fetchSupabase(commune, '2014-01-01', '2019-12-31', 1000),
+      // Fetch 2014-2019 et 2020-2025 en parallèle (deux requêtes pour contourner
+      // la limite de page_size=500 sur une grande plage)
+      const [recent, ancien] = await Promise.all([
+        fetchDVF({ commune, dateMin: '2020-01-01', pageSize: 500 }),
+        fetchDVF({ commune, dateMin: '2014-01-01', dateMax: '2019-12-31', pageSize: 500 }),
       ]);
 
-      // Merger et trier par date décroissante
-      const all = [...recents, ...historiques]
-        .sort((a, b) => new Date(b.date) - new Date(a.date));
+      const all = [...recent, ...ancien].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-      // Grouper par année pour le graphique
+      // Médiane récente (2 dernières années) pour l'estimateur
+      const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 2);
+      const prixM2Recents = recent
+        .filter(t => new Date(t.date) >= cutoff)
+        .map(t => t.prixM2).filter(p => p && p > 1000 && p < 20000);
+
+      // Évolution par année
       const byYear = {};
       all.forEach(t => {
-        const year = t.date?.slice(0, 4);
-        if (!year) return;
-        if (!byYear[year]) byYear[year] = { nb: 0, prixM2: [] };
-        byYear[year].nb++;
-        if (t.prixM2 && t.prixM2 > 1000 && t.prixM2 < 20000) {
-          byYear[year].prixM2.push(t.prixM2);
-        }
+        const y = t.date?.slice(0, 4);
+        if (!y) return;
+        if (!byYear[y]) byYear[y] = { nb: 0, prixM2: [] };
+        byYear[y].nb++;
+        if (t.prixM2 && t.prixM2 > 1000 && t.prixM2 < 20000) byYear[y].prixM2.push(t.prixM2);
       });
 
       const evolution = Object.entries(byYear)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([year, data]) => {
-          const sorted = data.prixM2.sort((a, b) => a - b);
-          const mid = Math.floor(sorted.length / 2);
-          const mediane = sorted.length === 0 ? null
-            : sorted.length % 2 === 0
-              ? Math.round((sorted[mid-1] + sorted[mid]) / 2)
-              : Math.round(sorted[mid]);
-          return { year, nb: data.nb, prixM2Median: mediane };
-        });
-
-      // Médiane prix/m² sur les 2 dernières années (pour compatibilité avec BudgetApp)
-      const cutoff2 = new Date(); cutoff2.setFullYear(cutoff2.getFullYear() - 2);
-      const recentsFiltered2 = recents.filter(t => new Date(t.date) >= cutoff2);
-      const prixM2List2 = recentsFiltered2
-        .map(t => t.prixM2).filter(p => p && p > 1000 && p < 20000).sort((a, b) => a - b);
-      const mid2 = Math.floor(prixM2List2.length / 2);
-      const mediane2 = prixM2List2.length === 0 ? null
-        : prixM2List2.length % 2 === 0
-          ? Math.round((prixM2List2[mid2-1] + prixM2List2[mid2]) / 2)
-          : Math.round(prixM2List2[mid2]);
+        .map(([year, d]) => ({ year, nb: d.nb, prixM2Median: mediane(d.prixM2) }));
 
       return Response.json({
         mode: 'historique',
         commune: COMMUNES_94[commune] || commune,
-        prix_m2_median: mediane2,         // compat BudgetApp (stats récentes 2 ans)
+        prix_m2_median: mediane(prixM2Recents),
         nb: all.length,
-        nb_recents: recents.length,
-        nb_historiques: historiques.length,
-        transactions: all.slice(0, 500),  // 500 transactions pour le graphique
+        nb_recents: recent.length,
+        nb_historiques: ancien.length,
+        transactions: all.slice(0, 500),
         evolution,
+        source: 'DVF data.gouv.fr 2014-2025 (DGFiP/Etalab) — adresses complètes',
       }, { headers: { 'Cache-Control': 'public, max-age=3600' } });
     }
 
-    return Response.json({ error: 'mode invalide (rue | stats | historique)' }, { status: 400 });
+    // ── MODE STATS : prix médian commune ─────────────────────────────────────
+    if (mode === 'stats') {
+      const [recent, histo] = await Promise.all([
+        fetchDVF({ commune, dateMin: '2023-01-01', pageSize: 200 }),
+        fetchSupabaseStats(commune),
+      ]);
+
+      const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 2);
+      const prixM2Recent = recent
+        .filter(t => new Date(t.date) >= cutoff)
+        .map(t => t.prixM2).filter(p => p && p > 1000 && p < 20000);
+
+      const prixM2Histo = histo
+        .filter(r => r.surface > 0 && r.prix > 0)
+        .map(r => Math.round(r.prix / r.surface))
+        .filter(p => p > 1000 && p < 20000);
+
+      return Response.json({
+        mode: 'stats',
+        commune: COMMUNES_94[commune] || commune,
+        prix_m2_median:       mediane(prixM2Recent),
+        prix_m2_median_histo: mediane(prixM2Histo),
+        nb_transactions:      recent.length,
+        nb_transactions_histo: histo.length,
+      }, { headers: { 'Cache-Control': 'public, max-age=86400' } });
+    }
+
+    return Response.json({ error: 'mode invalide (rue | historique | stats)' }, { status: 400 });
 
   } catch (e) {
     console.error('DVF route error:', e.message);
