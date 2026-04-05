@@ -23,12 +23,12 @@ const COMMUNES_94 = {
 
 // ─── DVF tabular API (2014-2025, avec adresses) ───────────────────────────────
 
-async function fetchDVF({ commune, rue, dateMin, dateMax, pageSize = 500 }) {
+async function fetchDVF({ commune, rue, dateMin, dateMax, pageSize = 200 }) {
   const params = new URLSearchParams({
     'code_commune__exact': commune,
     'type_local__exact':   'Maison',
     'date_mutation__sort': 'desc',
-    'page_size':           String(pageSize),
+    'page_size': String(Math.min(pageSize, 200)),
   });
 
   // Filtre par rue si fourni
@@ -141,8 +141,8 @@ export async function GET(request) {
       // - 2020-2025 : données récentes (tri desc, les plus récentes d'abord)
       // - 2014-2019 : données historiques (même rue, même commune)
       const [recent, ancien] = await Promise.all([
-        fetchDVF({ commune, rue, dateMin: '2020-01-01', pageSize: 500 }),
-        fetchDVF({ commune, rue, dateMin: '2014-01-01', dateMax: '2019-12-31', pageSize: 500 }),
+        fetchDVF({ commune, rue, dateMin: '2020-01-01', pageSize: 200 }),
+        fetchDVF({ commune, rue, dateMin: '2014-01-01', dateMax: '2019-12-31', pageSize: 200 }),
       ]);
 
       const transactions = [...recent, ...ancien]
@@ -165,8 +165,8 @@ export async function GET(request) {
       // Fetch 2014-2019 et 2020-2025 en parallèle (deux requêtes pour contourner
       // la limite de page_size=500 sur une grande plage)
       const [recent, ancien] = await Promise.all([
-        fetchDVF({ commune, dateMin: '2020-01-01', pageSize: 500 }),
-        fetchDVF({ commune, dateMin: '2014-01-01', dateMax: '2019-12-31', pageSize: 500 }),
+        fetchDVF({ commune, dateMin: '2020-01-01', pageSize: 200 }),
+        fetchDVF({ commune, dateMin: '2014-01-01', dateMax: '2019-12-31', pageSize: 200 }),
       ]);
 
       const all = [...recent, ...ancien].sort((a, b) => new Date(b.date) - new Date(a.date));
