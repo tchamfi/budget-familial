@@ -90,14 +90,24 @@ function GlobalStyles(){return(<style dangerouslySetInnerHTML={{__html:`
     .content-wrap{padding:20px 16px;}
     .nav-wrap{padding:8px 16px;}
   }
+  @media(max-width:768px){
+    .sim-grid{grid-template-columns:1fr!important;}
+    .tax-grid{grid-template-columns:1fr!important;}
+    .virement-grid{grid-template-columns:1fr!important;}
+  }
   @media(max-width:640px){
-    .grid-kpi{grid-template-columns:1fr;}
-    .header-inner{height:auto;padding:12px 0;flex-direction:column;gap:12px;align-items:flex-start;}
-    .header-right{flex-wrap:wrap;width:100%;}
-    .content-wrap{padding:16px 12px;}
-    .nav-wrap{padding:6px 12px;gap:4px;}
-    .month-bar{gap:3px;}
+    .grid-kpi{grid-template-columns:repeat(2,1fr);}
+    .grid-2col{grid-template-columns:1fr;}
+    .header-inner{height:auto;padding:12px 0;flex-direction:column;gap:10px;align-items:flex-start;}
+    .header-right{flex-wrap:wrap;width:100%;gap:8px;}
+    .content-wrap{padding:14px 10px;}
+    .nav-wrap{padding:6px 10px;gap:3px;}
+    .month-bar{gap:2px;}
     .section-header{flex-direction:column;align-items:flex-start;}
+  }
+  @media(max-width:400px){
+    .grid-kpi{grid-template-columns:1fr;}
+    .content-wrap{padding:10px 8px;}
   }
 `}}/>);}
 
@@ -207,15 +217,36 @@ function TaxSimulator(){
   const[revO,setRevO]=useState(50000);
   const[situation,setSituation]=useState("couple");
   const[enfants,setEnfants]=useState(2);
+  const[donsAssoc,setDonsAssoc]=useState(0);
+  const[emploiDomicile,setEmploiDomicile]=useState(0);
+  const[gardeEnfants,setGardeEnfants]=useState(0);
+  const[deficitFoncier,setDeficitFoncier]=useState(0);
+  const[autresReductions,setAutresReductions]=useState(0);
+  const[autresCredits,setAutresCredits]=useState(0);
+  const[tauxPASL,setTauxPASL]=useState(0);
+  const[tauxPASO,setTauxPASO]=useState(0);
+  const[editPAS,setEditPAS]=useState(false);
   const[result,setResult]=useState(null);
+
   const calculate=()=>{
     const revTotal=revL+revO;
     const isCouple=situation==="couple";
     const partsBase=isCouple?2:1;
     const partsEnfants=enfants<=2?enfants*0.5:1+((enfants-2)*1);
     const nbParts=partsBase+partsEnfants;
-    const impot=calculerIR(revTotal,nbParts,isCouple);
-    const tauxMoyen=revTotal>0?((impot/revTotal)*100):0;
+    const impotBrut=calculerIR(revTotal,nbParts,isCouple);
+    const redDons=Math.min(donsAssoc*0.66,revTotal*0.20);
+    const redEmploi=Math.min(emploiDomicile*0.50,isCouple?12000:6000);
+    const redGarde=Math.min(gardeEnfants*0.50,enfants*1150);
+    const redDeficit=Math.min(deficitFoncier,10700);
+    const totalReductions=redDons+redEmploi+redGarde+redDeficit+autresReductions;
+    const totalCredits=autresCredits;
+    const impotNet=Math.max(0,impotBrut-totalReductions);
+    const solde=Math.max(0,impotNet)-totalCredits;
+    const pasL=revL*(tauxPASL/100);
+    const pasO=revO*(tauxPASO/100);
+    const totalPAS=pasL+pasO;
+    const soldeAPayerOuRestituer=Math.round(solde-totalPAS);
     const qf=revTotal/nbParts;
     let tmi=0;
     for(const t of IR_TRANCHES){if(qf>t.min)tmi=t.taux*100;}
@@ -225,40 +256,143 @@ function TaxSimulator(){
       const montant=((Math.min(qf,t.max)-t.min)*t.taux)*nbParts;
       detail.push({tranche:`${fmt(t.min)} — ${t.max===Infinity?"∞":fmt(t.max)}`,taux:`${(t.taux*100).toFixed(0)}%`,montant:Math.round(montant)});
     }
-    setResult({impot,tauxMoyen:tauxMoyen.toFixed(1),tmi:tmi.toFixed(0),nbParts,revTotal,detail,mensuel:Math.round(impot/12)});
+    const tauxMoyen=revTotal>0?((impotNet/revTotal)*100):0;
+    const tauxPASSugL=revL>0&&revTotal>0?((impotNet*(revL/revTotal))/revL*100):0;
+    const tauxPASSugO=revO>0&&revTotal>0?((impotNet*(revO/revTotal))/revO*100):0;
+    setResult({impotBrut,totalReductions,impotNet,totalCredits,solde,totalPAS,pasL,pasO,soldeAPayerOuRestituer,tauxMoyen:tauxMoyen.toFixed(1),tmi:tmi.toFixed(0),nbParts,revTotal,detail,mensuel:Math.round(impotNet/12),tauxPASSugL:tauxPASSugL.toFixed(1),tauxPASSugO:tauxPASSugO.toFixed(1),redDons,redEmploi,redGarde,redDeficit});
   };
-  useEffect(()=>{calculate();},[revL,revO,situation,enfants]);
+  useEffect(()=>{calculate();},[revL,revO,situation,enfants,donsAssoc,emploiDomicile,gardeEnfants,deficitFoncier,autresReductions,autresCredits,tauxPASL,tauxPASO]);
+
   const ls={fontSize:11,fontWeight:600,color:"#8a8578",marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.05em"};
   const is={padding:"10px 14px",border:"1px solid #ddd8d0",borderRadius:10,fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",background:"#faf9f7",fontFamily:"'DM Sans',sans-serif",textAlign:"right"};
-  return(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24}}>
-    <div style={{background:"#fff",borderRadius:16,padding:24,border:"1px solid rgba(26,26,46,0.06)"}}>
-      <h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:18,marginBottom:20}}>Paramètres</h3>
-      <div style={{display:"flex",flexDirection:"column",gap:16}}>
-        <div><label style={ls}>Revenu net imposable — Lionel</label><input style={is} type="number" value={revL} onChange={e=>setRevL(+e.target.value)}/></div>
-        <div><label style={ls}>Revenu net imposable — Ophélie</label><input style={is} type="number" value={revO} onChange={e=>setRevO(+e.target.value)}/></div>
-        <div><label style={ls}>Situation</label><div style={{display:"flex",gap:8}}>{[["couple","Marié / Pacsé"],["solo","Célibataire"]].map(([v,l])=><button key={v} className="btn-press" onClick={()=>setSituation(v)} style={{flex:1,padding:"10px",border:situation===v?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:situation===v?700:400,background:situation===v?"rgba(26,26,46,0.04)":"#fff",color:situation===v?"#1a1a2e":"#8a8578"}}>{l}</button>)}</div></div>
-        <div><label style={ls}>Nombre d'enfants à charge</label><div style={{display:"flex",gap:6}}>{[0,1,2,3,4,5].map(n=><button key={n} className="btn-press" onClick={()=>setEnfants(n)} style={{width:42,height:42,border:enfants===n?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:15,fontWeight:enfants===n?700:400,background:enfants===n?"rgba(26,26,46,0.04)":"#fff",color:enfants===n?"#1a1a2e":"#8a8578"}}>{n}</button>)}</div></div>
-        <div style={{padding:"12px 16px",background:"#f2efeb",borderRadius:10,fontSize:12,color:"#8a8578"}}>Barème IR 2026 (revenus 2025) — Quotient familial : <strong style={{color:"#1a1a2e"}}>{result?.nbParts} parts</strong></div>
+  const inputRow=(label,value,setter,hint)=>(
+    <div key={label}>
+      <label style={ls}>{label}</label>
+      <input style={is} type="number" value={value} onChange={e=>setter(+e.target.value)} placeholder="0"/>
+      {hint&&<div style={{fontSize:10,color:"#b8b4ac",marginTop:3}}>{hint}</div>}
+    </div>
+  );
+
+  const soldePositif=(result?.soldeAPayerOuRestituer||0)>0;
+  const soldeNeutre=(result?.soldeAPayerOuRestituer||0)===0;
+
+  return(<div>
+    <style dangerouslySetInnerHTML={{__html:`.tax-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;}@media(max-width:768px){.tax-grid{grid-template-columns:1fr!important;}}`}}/>
+    <div className="tax-grid">
+    {/* COLONNE GAUCHE */}
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+
+      <div style={{background:"#fff",borderRadius:16,padding:24,border:"1px solid rgba(26,26,46,0.06)"}}>
+        <h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:18,marginBottom:16}}>📊 Paramètres fiscaux</h3>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {inputRow("Revenu net imposable — Lionel",revL,setRevL)}
+          {inputRow("Revenu net imposable — Ophélie",revO,setRevO)}
+          <div><label style={ls}>Situation</label><div style={{display:"flex",gap:8}}>{[["couple","Marié / Pacsé"],["solo","Célibataire"]].map(([v,l])=><button key={v} className="btn-press" onClick={()=>setSituation(v)} style={{flex:1,padding:"10px",border:situation===v?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:situation===v?700:400,background:situation===v?"rgba(26,26,46,0.04)":"#fff",color:situation===v?"#1a1a2e":"#8a8578"}}>{l}</button>)}</div></div>
+          <div><label style={ls}>Enfants à charge</label><div style={{display:"flex",gap:6}}>{[0,1,2,3,4,5].map(n=><button key={n} className="btn-press" onClick={()=>setEnfants(n)} style={{width:42,height:42,border:enfants===n?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:15,fontWeight:enfants===n?700:400,background:enfants===n?"rgba(26,26,46,0.04)":"#fff",color:enfants===n?"#1a1a2e":"#8a8578"}}>{n}</button>)}</div></div>
+          <div style={{padding:"10px 14px",background:"#f2efeb",borderRadius:10,fontSize:12,color:"#8a8578"}}>Barème IR 2026 (revenus 2025) — <strong style={{color:"#1a1a2e"}}>{result?.nbParts} parts fiscales</strong></div>
+        </div>
+      </div>
+
+      <div style={{background:"#fff",borderRadius:16,padding:24,border:"1px solid rgba(26,26,46,0.06)"}}>
+        <h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:16,marginBottom:16}}>💚 Réductions & Crédits d&apos;impôt</h3>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {inputRow("Dons aux associations (€ versés)",donsAssoc,setDonsAssoc,"Réduction = 66% dans la limite de 20% du RNI"+(result?.redDons>0?` → ${fmt(result.redDons)}`:""))}
+          {inputRow("Emploi à domicile (€ dépensés)",emploiDomicile,setEmploiDomicile,"Réduction = 50%, plafond 6 000€ (12 000€ couple)"+(result?.redEmploi>0?` → ${fmt(result.redEmploi)}`:""))}
+          {inputRow("Garde enfants hors domicile (€)",gardeEnfants,setGardeEnfants,"Crédit = 50%, plafond 1 150€/enfant"+(result?.redGarde>0?` → ${fmt(result.redGarde)}`:""))}
+          {inputRow("Déficit foncier (€)",deficitFoncier,setDeficitFoncier,"Réduction directe, plafond 10 700€/an"+(result?.redDeficit>0?` → ${fmt(result.redDeficit)}`:""))}
+          {inputRow("Autres réductions (€)",autresReductions,setAutresReductions)}
+          {inputRow("Autres crédits d'impôt (€)",autresCredits,setAutresCredits,"Remboursables si supérieur à l'impôt")}
+          {(result?.totalReductions||0)>0&&<div style={{padding:"10px 14px",background:"#f0fdf4",borderRadius:10,fontSize:12,color:"#15803d",fontWeight:600}}>✓ Total réductions : {fmt(result.totalReductions)} → économie réelle sur l&apos;impôt</div>}
+        </div>
+      </div>
+
+      <div style={{background:"#fff",borderRadius:16,padding:24,border:"1px solid rgba(26,26,46,0.06)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:16,margin:0}}>🏦 Prélèvement à la source (PAS)</h3>
+          <button className="btn-press" onClick={()=>setEditPAS(p=>!p)} style={{padding:"6px 14px",background:editPAS?"#1a1a2e":"transparent",color:editPAS?"#faf9f7":"#8a8578",border:"1px solid #ddd8d0",borderRadius:8,cursor:"pointer",fontSize:11,fontWeight:600}}>{editPAS?"Fermer":"Modifier"}</button>
+        </div>
+        {editPAS?(
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div>
+              <label style={ls}>Taux PAS Lionel (%)</label>
+              <input style={is} type="number" step="0.1" value={tauxPASL} onChange={e=>setTauxPASL(+e.target.value)}/>
+              <div style={{fontSize:10,color:"#b8b4ac",marginTop:3}}>Taux suggéré selon votre impôt : {result?.tauxPASSugL}%</div>
+            </div>
+            <div>
+              <label style={ls}>Taux PAS Ophélie (%)</label>
+              <input style={is} type="number" step="0.1" value={tauxPASO} onChange={e=>setTauxPASO(+e.target.value)}/>
+              <div style={{fontSize:10,color:"#b8b4ac",marginTop:3}}>Taux suggéré selon votre impôt : {result?.tauxPASSugO}%</div>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button className="btn-press" onClick={()=>{setTauxPASL(+parseFloat(result?.tauxPASSugL||0).toFixed(1));setTauxPASO(+parseFloat(result?.tauxPASSugO||0).toFixed(1));}} style={{padding:"8px 14px",background:"#1a1a2e",color:"#faf9f7",border:"none",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600}}>Utiliser les taux calculés</button>
+              <button className="btn-press" onClick={()=>{setTauxPASL(0);setTauxPASO(0);}} style={{padding:"8px 14px",background:"transparent",color:"#8a8578",border:"1px solid #ddd8d0",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:600}}>Remettre à 0</button>
+            </div>
+          </div>
+        ):(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div style={{background:"#f2efeb",borderRadius:10,padding:"12px 14px"}}><div style={{fontSize:10,color:"#8a8578",marginBottom:4,textTransform:"uppercase",fontWeight:600}}>PAS Lionel</div><div style={{fontSize:20,fontWeight:700}}>{tauxPASL}%</div><div style={{fontSize:11,color:"#8a8578"}}>{fmt(result?.pasL||0)}/an</div></div>
+            <div style={{background:"#f2efeb",borderRadius:10,padding:"12px 14px"}}><div style={{fontSize:10,color:"#8a8578",marginBottom:4,textTransform:"uppercase",fontWeight:600}}>PAS Ophélie</div><div style={{fontSize:20,fontWeight:700}}>{tauxPASO}%</div><div style={{fontSize:11,color:"#8a8578"}}>{fmt(result?.pasO||0)}/an</div></div>
+          </div>
+        )}
       </div>
     </div>
-    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+
+    {/* COLONNE DROITE — Résultats */}
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+
       <div style={{background:"linear-gradient(135deg,#1a1a2e,#2d2b55)",borderRadius:16,padding:28,color:"#faf9f7"}}>
-        <div style={{fontSize:12,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7a7890",marginBottom:8}}>Impôt estimé</div>
-        <div style={{fontFamily:"'DM Serif Display',serif",fontSize:42,lineHeight:1}}>{fmt(result?.impot||0)}</div>
+        <div style={{fontSize:11,textTransform:"uppercase",letterSpacing:"0.08em",color:"#7a7890",marginBottom:8}}>Impôt net estimé</div>
+        <div style={{fontFamily:"'DM Serif Display',serif",fontSize:42,lineHeight:1}}>{fmt(result?.impotNet||0)}</div>
         <div style={{fontSize:14,color:"#7a7890",marginTop:8}}>soit {fmt(result?.mensuel||0)} / mois</div>
+        {(result?.totalReductions||0)>0&&<div style={{marginTop:12,fontSize:12,color:"#4ade80"}}>✓ Économie : {fmt(result?.totalReductions)} de réductions appliquées</div>}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-        <div style={{background:"#fff",borderRadius:12,padding:16,border:"1px solid rgba(26,26,46,0.06)",textAlign:"center"}}><div style={{fontSize:11,color:"#8a8578",textTransform:"uppercase",marginBottom:4}}>Taux moyen</div><div style={{fontSize:22,fontWeight:800,color:"#1a1a2e"}}>{result?.tauxMoyen}%</div></div>
-        <div style={{background:"#fff",borderRadius:12,padding:16,border:"1px solid rgba(26,26,46,0.06)",textAlign:"center"}}><div style={{fontSize:11,color:"#8a8578",textTransform:"uppercase",marginBottom:4}}>TMI</div><div style={{fontSize:22,fontWeight:800,color:"#1a1a2e"}}>{result?.tmi}%</div></div>
-        <div style={{background:"#fff",borderRadius:12,padding:16,border:"1px solid rgba(26,26,46,0.06)",textAlign:"center"}}><div style={{fontSize:11,color:"#8a8578",textTransform:"uppercase",marginBottom:4}}>Parts</div><div style={{fontSize:22,fontWeight:800,color:"#1a1a2e"}}>{result?.nbParts}</div></div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+        <div style={{background:"#fff",borderRadius:12,padding:14,border:"1px solid rgba(26,26,46,0.06)",textAlign:"center"}}><div style={{fontSize:10,color:"#8a8578",textTransform:"uppercase",marginBottom:4}}>Taux moyen</div><div style={{fontSize:20,fontWeight:800,color:"#1a1a2e"}}>{result?.tauxMoyen}%</div></div>
+        <div style={{background:"#fff",borderRadius:12,padding:14,border:"1px solid rgba(26,26,46,0.06)",textAlign:"center"}}><div style={{fontSize:10,color:"#8a8578",textTransform:"uppercase",marginBottom:4}}>TMI</div><div style={{fontSize:20,fontWeight:800,color:"#1a1a2e"}}>{result?.tmi}%</div></div>
+        <div style={{background:"#fff",borderRadius:12,padding:14,border:"1px solid rgba(26,26,46,0.06)",textAlign:"center"}}><div style={{fontSize:10,color:"#8a8578",textTransform:"uppercase",marginBottom:4}}>Parts</div><div style={{fontSize:20,fontWeight:800,color:"#1a1a2e"}}>{result?.nbParts}</div></div>
       </div>
+
+      <div style={{background:soldePositif?"#fef2f2":soldeNeutre?"#f9f9f9":"#f0fdf4",borderRadius:14,padding:20,border:`2px solid ${soldePositif?"#fca5a5":"#86efac"}`}}>
+        <div style={{fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em",color:soldePositif?"#b91c1c":"#15803d",marginBottom:8}}>{soldePositif?"💳 Reste à payer à la régularisation":"💰 Remboursement estimé"}</div>
+        <div style={{fontFamily:"'DM Serif Display',serif",fontSize:36,color:soldePositif?"#b91c1c":"#15803d"}}>{soldePositif?"+":""}{fmt(Math.abs(result?.soldeAPayerOuRestituer||0))}</div>
+        <div style={{fontSize:12,color:soldePositif?"#dc2626":"#15803d",marginTop:8,display:"flex",flexDirection:"column",gap:3}}>
+          <span>Impôt net : {fmt(result?.impotNet||0)}</span>
+          {(result?.totalCredits||0)>0&&<span>Crédits d&apos;impôt : −{fmt(result?.totalCredits||0)}</span>}
+          <span>PAS prélevé sur l&apos;année : −{fmt(result?.totalPAS||0)}</span>
+        </div>
+        {tauxPASL===0&&tauxPASO===0&&<div style={{marginTop:10,fontSize:11,color:"#8a8578",fontStyle:"italic"}}>Renseignez vos taux PAS ci-contre pour calculer le solde réel</div>}
+      </div>
+
       <div style={{background:"#fff",borderRadius:12,padding:16,border:"1px solid rgba(26,26,46,0.06)"}}>
-        <div style={{fontSize:12,fontWeight:600,color:"#8a8578",textTransform:"uppercase",marginBottom:12}}>Détail par tranche</div>
+        <div style={{fontSize:12,fontWeight:600,color:"#8a8578",textTransform:"uppercase",marginBottom:12}}>Décomposition du calcul</div>
+        {[
+          {l:"Impôt brut (barème IR)",v:result?.impotBrut,c:""},
+          {l:"− Réductions d'impôt",v:-(result?.totalReductions||0),c:"#15803d"},
+          {l:"= Impôt net",v:result?.impotNet,c:"",bold:true,sep:true},
+          {l:"− Crédits d'impôt",v:-(result?.totalCredits||0),c:"#15803d"},
+          {l:"− PAS déjà prélevé",v:-(result?.totalPAS||0),c:"#6d28d9",sep:true},
+          {l:soldePositif?"➕ Reste à payer":"💰 Remboursement",v:result?.soldeAPayerOuRestituer,c:soldePositif?"#b91c1c":"#15803d",bold:true},
+        ].map((row,i)=>(
+          <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:row.sep?"2px solid #e8e4dd":"none",marginBottom:row.sep?4:0,fontSize:13}}>
+            <span style={{color:"#8a8578",fontWeight:row.bold?600:400}}>{row.l}</span>
+            <span style={{fontWeight:row.bold?700:500,color:row.c||"#1a1a2e"}}>{fmt(row.v||0)}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{background:"#fff",borderRadius:12,padding:16,border:"1px solid rgba(26,26,46,0.06)"}}>
+        <div style={{fontSize:12,fontWeight:600,color:"#8a8578",textTransform:"uppercase",marginBottom:12}}>Détail par tranche d&apos;imposition</div>
         {result?.detail?.map((d,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:i<result.detail.length-1?"1px solid #f2efeb":"none",fontSize:13}}>
           <span style={{color:"#8a8578"}}>{d.tranche}</span>
-          <span style={{display:"flex",gap:16}}><span style={{color:"#8a8578",minWidth:40,textAlign:"right"}}>{d.taux}</span><span style={{fontWeight:600,minWidth:80,textAlign:"right"}}>{fmt(d.montant)}</span></span>
+          <span style={{display:"flex",gap:16}}><span style={{color:"#8a8578",minWidth:36,textAlign:"right"}}>{d.taux}</span><span style={{fontWeight:600,minWidth:80,textAlign:"right"}}>{fmt(d.montant)}</span></span>
         </div>)}
       </div>
+
+      <div style={{padding:"12px 14px",background:"#f2efeb",borderRadius:10,fontSize:11,color:"#8a8578",lineHeight:1.6}}>
+        ⚠️ Simulation indicative basée sur le barème IR 2026 (revenus 2025). Les plafonds et taux de réduction sont approximatifs. Consultez votre avis d&apos;imposition ou un conseiller fiscal pour une estimation précise.
+      </div>
+    </div>
     </div>
   </div>);
 }
@@ -694,7 +828,7 @@ function SimulateurImmobilier() {
       </div>
 
       {activeTab === 'simulation' && (
-        <div style={styles.simGrid}>
+        <div style={styles.simGrid} className="sim-grid">
           <div>
             <Card title="⚙️ Mensualité souhaitée">
               {/* En-tête : valeur actuelle + badge max */}
