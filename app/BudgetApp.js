@@ -1,13 +1,13 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { useFinary, PatrimoineTab, BudgetReelTab, ComptesTab, finaryContext } from "./FinaryTabs";
 
-const AIRTABLE_TOKEN = process.env.NEXT_PUBLIC_AIRTABLE_TOKEN;
-const BASE_ID = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID;
+// Le jeton Airtable reste côté serveur : le navigateur passe par /api/airtable, protégé par la session.
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-const API = `https://api.airtable.com/v0/${BASE_ID}`;
-const HEADERS = { Authorization: `Bearer ${AIRTABLE_TOKEN}`, "Content-Type": "application/json" };
-const AUTHORIZED_EMAILS = ["tchamfong@gmail.com", "ophelie.linde@gmail.com"];
+const API = "/api/airtable";
+const HEADERS = { "Content-Type": "application/json" };
+async function apiFetch(url,init={}){const r=await fetch(url,{...init,headers:HEADERS,credentials:"same-origin"});if(r.status===401&&typeof window!=="undefined")window.dispatchEvent(new Event("bf-unauth"));return r;}
 const MOIS = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
 const MOIS_FULL = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const CAT_COLORS = {"LOGEMENT":"#1e40af","MAISON":"#6d28d9","VOITURE & TRANSPORT":"#c2410c","ABONNEMENTS":"#0e7490","SPORT & SANTÉ":"#15803d","ENFANTS":"#be185d","DEPENSES EXEPTIONNELLES":"#b91c1c","LOISIRS":"#a16207","ALIMENTAIRE":"#4d7c0f"};
@@ -49,13 +49,12 @@ function calculerIR(revenuImposable, nbParts, isCouple=true) {
   return Math.round(impotBrut);
 }
 
-async function fetchAll(table){let all=[],offset=null;do{const url=`${API}/${encodeURIComponent(table)}?pageSize=100${offset?`&offset=${offset}`:""}`;const res=await fetch(url,{headers:HEADERS});const data=await res.json();all=all.concat(data.records||[]);offset=data.offset;}while(offset);return all;}
-async function fetchRecords(table,params=""){const r=await fetch(`${API}/${encodeURIComponent(table)}?${params}`,{headers:HEADERS});const d=await r.json();return d.records||[];}
-async function updateRecord(table,id,fields){return(await fetch(`${API}/${encodeURIComponent(table)}/${id}`,{method:"PATCH",headers:HEADERS,body:JSON.stringify({fields})})).json();}
-async function createRecord(table,fields){return(await fetch(`${API}/${encodeURIComponent(table)}`,{method:"POST",headers:HEADERS,body:JSON.stringify({records:[{fields}]})})).json();}
-async function deleteRecord(table,id){await fetch(`${API}/${encodeURIComponent(table)}/${id}`,{method:"DELETE",headers:HEADERS});}
-async function batchDelete(table,ids){for(let i=0;i<ids.length;i+=10){const batch=ids.slice(i,i+10);const params=batch.map(id=>`records[]=${id}`).join("&");await fetch(`${API}/${encodeURIComponent(table)}?${params}`,{method:"DELETE",headers:HEADERS});}}
-function decodeJwt(t){try{return JSON.parse(atob(t.split(".")[1].replace(/-/g,"+").replace(/_/g,"/")));}catch{return null;}}
+async function fetchAll(table){let all=[],offset=null;do{const url=`${API}/${encodeURIComponent(table)}?pageSize=100${offset?`&offset=${offset}`:""}`;const res=await apiFetch(url);const data=await res.json();all=all.concat(data.records||[]);offset=data.offset;}while(offset);return all;}
+async function fetchRecords(table,params=""){const r=await apiFetch(`${API}/${encodeURIComponent(table)}?${params}`);const d=await r.json();return d.records||[];}
+async function updateRecord(table,id,fields){return(await apiFetch(`${API}/${encodeURIComponent(table)}/${id}`,{method:"PATCH",body:JSON.stringify({fields})})).json();}
+async function createRecord(table,fields){return(await apiFetch(`${API}/${encodeURIComponent(table)}`,{method:"POST",body:JSON.stringify({records:[{fields}]})})).json();}
+async function deleteRecord(table,id){await apiFetch(`${API}/${encodeURIComponent(table)}/${id}`,{method:"DELETE"});}
+async function batchDelete(table,ids){for(let i=0;i<ids.length;i+=10){const batch=ids.slice(i,i+10);const params=batch.map(id=>`records[]=${id}`).join("&");await apiFetch(`${API}/${encodeURIComponent(table)}?${params}`,{method:"DELETE"});}}
 
 function GlobalStyles(){return(<style dangerouslySetInnerHTML={{__html:`
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Serif+Display&display=swap');
@@ -112,7 +111,7 @@ function GlobalStyles(){return(<style dangerouslySetInnerHTML={{__html:`
 `}}/>);}
 
 function LoginPage({onLogin}){
-  useEffect(()=>{const s=document.createElement("script");s.src="https://accounts.google.com/gsi/client";s.async=true;s.onload=()=>{window.google?.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:r=>{const p=decodeJwt(r.credential);if(p&&AUTHORIZED_EMAILS.includes(p.email)){localStorage.setItem("budget_user",JSON.stringify({email:p.email,name:p.name,picture:p.picture}));onLogin({email:p.email,name:p.name,picture:p.picture});}else alert("Accès refusé.");}});window.google?.accounts.id.renderButton(document.getElementById("gsi-btn"),{theme:"outline",size:"large",width:300,text:"signin_with",shape:"pill",logo_alignment:"center"});};document.body.appendChild(s);return()=>{try{document.body.removeChild(s);}catch{}};},[onLogin]);
+  useEffect(()=>{const s=document.createElement("script");s.src="https://accounts.google.com/gsi/client";s.async=true;s.onload=()=>{window.google?.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:async r=>{try{const res=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({credential:r.credential})});const d=await res.json().catch(()=>({}));if(res.ok&&d.user)onLogin(d.user);else alert(d.error||"Accès refusé.");}catch{alert("Connexion impossible. Réessaie.");}}});window.google?.accounts.id.renderButton(document.getElementById("gsi-btn"),{theme:"outline",size:"large",width:300,text:"signin_with",shape:"pill",logo_alignment:"center"});};document.body.appendChild(s);return()=>{try{document.body.removeChild(s);}catch{}};},[onLogin]);
   return(<><GlobalStyles/><div className="grain"/><div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"linear-gradient(165deg,#faf9f7 0%,#f0ede8 40%,#e8e4dd 100%)",position:"relative",overflow:"hidden"}}>
     <div style={{position:"absolute",top:-120,right:-80,width:400,height:400,borderRadius:"50%",border:"1px solid rgba(26,26,46,0.06)"}}/>
     <div style={{position:"absolute",bottom:-60,left:-40,width:300,height:300,borderRadius:"50%",background:"rgba(26,26,46,0.02)"}}/>
@@ -158,7 +157,7 @@ function AddEpModal({onClose,onAdd}){const[type,setType]=useState("");const[bene
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}><button className="btn-press" onClick={onClose} style={{padding:"10px 20px",background:"transparent",color:"#8a8578",border:"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600}}>Annuler</button><button className="btn-press" disabled={!type} onClick={()=>onAdd({type,beneficiaire:benef,objectif:obj})} style={{padding:"10px 22px",background:"#1a1a2e",color:"#faf9f7",border:"none",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600,opacity:type?1:.5}}>Ajouter</button></div>
   </div></Modal>);}
 
-function AIAssistant({revenus,charges,chargesMontants,epargne,epargneMontants,objectifs,annee}){
+function AIAssistant({revenus,charges,chargesMontants,epargne,epargneMontants,objectifs,annee,finaryData}){
   const[msgs,setMsgs]=useState([{role:"assistant",content:"Bonjour ! Je suis votre assistant budgétaire. Posez-moi des questions sur vos finances : analyse des dépenses, conseils d'économies, projections..."}]);
   const[input,setInput]=useState("");
   const[loading,setLoading]=useState(false);
@@ -177,6 +176,7 @@ function AIAssistant({revenus,charges,chargesMontants,epargne,epargneMontants,ob
     epargne.forEach(ep=>{const montants=emByYear.filter(em=>{const l=em.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===ep.id;});const total=montants.reduce((s,m)=>s+(m.fields?.montant||0),0);ctx+=`${ep.fields?.type} (${ep.fields?.beneficiaire}): Total=${total}€\n`;});
     ctx+=`\nOBJECTIFS:\n`;
     objectifs.forEach(o=>ctx+=`${o.fields?.type}: Objectif=${o.fields?.objectif_annuel||0}€\n`);
+    ctx+=finaryContext(finaryData);
     return ctx;
   };
   const send=async()=>{
@@ -486,8 +486,9 @@ export default function BudgetApp(){
   const[versementsPonctuels,setVersementsPonctuels]=useState([]);
   // Charger les versements ponctuels depuis Airtable
   useEffect(()=>{
+    if(!user)return;
     fetchRecords("Epargne_ponctuelle").then(recs=>setVersementsPonctuels(recs||[])).catch(()=>{});
-  },[]);
+  },[user]);
   const ajouterVersement=async()=>{
     if(!nvDesc.trim()||nvMontant<=0)return;
     const moisStr=String(nvMois+1).padStart(2,"0");
@@ -502,11 +503,13 @@ export default function BudgetApp(){
   const supprimerVersement=async(id)=>{
     await save(async()=>{await deleteRecord("Epargne_ponctuelle",id);setVersementsPonctuels(p=>p.filter(v=>v.id!==id));});
   };const[delCharge,setDelCharge]=useState(null);const[delEpargne,setDelEpargne]=useState(null);const[delObjectif,setDelObjectif]=useState(null);const[initYearTarget,setInitYearTarget]=useState(null);
-  useEffect(()=>{const s=localStorage.getItem("budget_user");if(s){try{const u=JSON.parse(s);if(AUTHORIZED_EMAILS.includes(u.email))setUser(u);}catch{}}setAuthChecked(true);},[]);
+  useEffect(()=>{try{localStorage.removeItem("budget_user");}catch{}fetch("/api/auth/me",{credentials:"same-origin",cache:"no-store"}).then(r=>r.ok?r.json():null).then(d=>{if(d?.user)setUser(d.user);}).catch(()=>{}).finally(()=>setAuthChecked(true));},[]);
+  useEffect(()=>{const onUnauth=()=>setUser(null);window.addEventListener("bf-unauth",onUnauth);return()=>window.removeEventListener("bf-unauth",onUnauth);},[]);
+  const finary=useFinary(!!user&&!loading);
   const loadData=useCallback(async()=>{setLoading(true);try{const[rev,chg,cm,ep,em,obj]=await Promise.all([fetchAll("Revenus"),fetchAll("Charges"),fetchAll("Charges_Montants"),fetchAll("Epargne"),fetchAll("Epargne_montants"),fetchAll("Objectifs")]);setRevenus(rev);setCharges(chg);setChargesMontants(cm);setEpargne(ep);setEpargneMontants(em);setObjectifs(obj);}catch(e){console.error(e);}setLoading(false);},[]);
   useEffect(()=>{if(user)loadData();},[user,loadData]);
   const save=async fn=>{setSaving(true);await fn();setTimeout(()=>setSaving(false),1500);};
-  const logout=()=>{localStorage.removeItem("budget_user");setUser(null);};
+  const logout=async()=>{try{await fetch("/api/auth/logout",{method:"POST",credentials:"same-origin"});}catch{}try{window.google?.accounts.id.disableAutoSelect();}catch{}setUser(null);};
   const revByYear=useMemo(()=>revenus.filter(r=>r.fields?.annee===annee),[revenus,annee]);
   const cmByYear=useMemo(()=>chargesMontants.filter(r=>r.fields?.annee===annee),[chargesMontants,annee]);
   const emByYear=useMemo(()=>epargneMontants.filter(r=>r.fields?.annee===annee),[epargneMontants,annee]);
@@ -547,17 +550,17 @@ export default function BudgetApp(){
   const bG={padding:"8px 16px",background:"transparent",color:"#8a8578",border:"1px solid #ddd8d0",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:500};
   const bD={padding:"5px 10px",background:"transparent",color:"#b91c1c",border:"1px solid #f5c6c6",borderRadius:7,cursor:"pointer",fontSize:10,fontWeight:600};
   const mB=(a)=>({padding:"7px 14px",border:a?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:a?700:400,background:a?"rgba(26,26,46,0.06)":"#fff",color:a?"#1a1a2e":"#8a8578"});
-  const tabs=[["dashboard","Tableau de bord"],["revenus","Revenus"],["charges","Charges"],["epargne","Épargne"],["objectifs","Objectifs"],["virements","Virements"],["impots","Simulateur IR"],["assistant","Assistant IA"],["immobilier","🏠 Immobilier"]];
+  const tabs=[["dashboard","Tableau de bord"],["patrimoine","Patrimoine"],["budget_reel","Budget réel"],["placements","Comptes"],["revenus","Revenus"],["charges","Charges"],["epargne","Épargne"],["objectifs","Objectifs"],["virements","Virements"],["impots","Simulateur IR"],["assistant","Assistant IA"],["immobilier","🏠 Immobilier"]];
   return(<><GlobalStyles/><div className="grain"/><div style={{minHeight:"100vh",background:"#faf9f7"}}>
     {saving&&<div className="fade-in" style={{position:"fixed",bottom:24,right:24,background:"#1a1a2e",color:"#faf9f7",padding:"10px 20px",borderRadius:12,fontSize:13,fontWeight:600,boxShadow:"0 8px 30px rgba(26,26,46,0.2)",zIndex:2000,display:"flex",alignItems:"center",gap:8}}><div style={{width:8,height:8,borderRadius:"50%",background:"#4ade80",animation:"pulse 1s infinite"}}/>Sauvegarde...</div>}
     <div style={{background:"#1a1a2e",padding:"0 max(16px,calc((100% - 1320px)/2 + 36px))",position:"sticky",top:0,zIndex:100}}><div className="header-inner">
       <div style={{display:"flex",alignItems:"center",gap:16}}><div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#2d2b55,#44427a)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#faf9f7" strokeWidth="2" strokeLinecap="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div><div><div style={{fontFamily:"'DM Serif Display',serif",color:"#faf9f7",fontSize:18}}>Budget Familial</div><div style={{color:"#7a7890",fontSize:11,fontWeight:500}}>Tchamfong · {annee}</div></div></div>
-      <div style={{display:"flex",alignItems:"center",gap:14}}><div style={{display:"flex",gap:2,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:3}}>{availYears.map(y=><button key={y} className="btn-press" onClick={()=>handleInitYear(y)} style={{padding:"5px 14px",border:"none",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:annee===y?700:400,background:annee===y?"#fff":"transparent",color:annee===y?"#1a1a2e":"#7a7890"}}>{y}</button>)}</div>
+      <div className="header-right" style={{display:"flex",alignItems:"center",gap:14}}><div style={{display:"flex",gap:2,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:3}}>{availYears.map(y=><button key={y} className="btn-press" onClick={()=>handleInitYear(y)} style={{padding:"5px 14px",border:"none",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:annee===y?700:400,background:annee===y?"#fff":"transparent",color:annee===y?"#1a1a2e":"#7a7890"}}>{y}</button>)}</div>
       <select value={mois} onChange={e=>setMois(+e.target.value)} style={{padding:"7px 12px",background:"rgba(255,255,255,0.06)",color:"#faf9f7",border:"1px solid rgba(255,255,255,0.1)",borderRadius:9,fontSize:12,outline:"none",fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>{MOIS_FULL.map((m,i)=><option key={i} value={i} style={{background:"#1a1a2e"}}>{m}</option>)}</select>
       <div style={{width:1,height:28,background:"rgba(255,255,255,0.1)"}}/>
       <div style={{display:"flex",alignItems:"center",gap:10}}>{user.picture&&<img src={user.picture} style={{width:30,height:30,borderRadius:8,objectFit:"cover",border:"2px solid rgba(255,255,255,0.1)"}} alt="" referrerPolicy="no-referrer"/>}<div><div style={{color:"#faf9f7",fontSize:12,fontWeight:600}}>{user.name?.split(" ")[0]}</div><button onClick={logout} style={{background:"none",border:"none",color:"#7a7890",fontSize:10,cursor:"pointer",padding:0,fontFamily:"'DM Sans',sans-serif"}}>Déconnexion</button></div></div></div>
     </div></div>
-    <div style={{background:"#fff",borderBottom:"1px solid #e8e4dd",position:"sticky",top:68,zIndex:99}}><div className="nav-wrap">{tabs.map(([k,l])=><button key={k} className="btn-press" onClick={()=>setTab(k)} style={{padding:"8px 18px",border:"none",borderRadius:9,cursor:"pointer",fontSize:13,fontWeight:600,background:tab===k?"#1a1a2e":"transparent",color:tab===k?"#faf9f7":"#8a8578",whiteSpace:"nowrap",position:"relative"}}>{l}</button>)}</div></div>
+    <div style={{background:"#fff",borderBottom:"1px solid #e8e4dd",position:"sticky",top:68,zIndex:99}}><div className="nav-wrap">{tabs.map(([k,l])=><button key={k} className="btn-press" onClick={()=>setTab(k)} style={{padding:"8px 14px",border:"none",borderRadius:9,cursor:"pointer",fontSize:13,fontWeight:600,background:tab===k?"#1a1a2e":"transparent",color:tab===k?"#faf9f7":"#8a8578",whiteSpace:"nowrap",position:"relative"}}>{l}</button>)}</div></div>
     <div className="content-wrap">
     {tab==="dashboard"&&<div style={{display:"flex",flexDirection:"column",gap:24}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:0}}>{MOIS_FULL[mois]} {annee}</h3><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{MOIS.map((m,i)=><button key={i} className="btn-press" style={mB(mois===i)} onClick={()=>setMois(i)}>{m}</button>)}</div></div>
@@ -686,8 +689,11 @@ export default function BudgetApp(){
     </div>}
     {tab==="objectifs"&&<div className="fade-up" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:"0 0 20px"}}>Objectifs {annee}</h3><table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th style={thS}>Type</th><th style={{...thS,textAlign:"right",width:150}}>Objectif</th><th style={{...thS,textAlign:"right",width:150}}>Réalisé</th><th style={{...thS,width:200}}>Progression</th><th style={{...thS,width:130}}></th></tr></thead><tbody>{objectifs.map(obj=><ObjRow key={obj.id} obj={obj} epargne={epargne} emByYear={emByYear} tdS={tdS} iS={iS} bP={bP} bG={bG} bD={bD} onSave={async v=>{await save(async()=>{await updateRecord("Objectifs",obj.id,{objectif_annuel:v});setObjectifs(p=>p.map(r=>r.id===obj.id?{...r,fields:{...r.fields,objectif_annuel:v}}:r));});}} onDelete={()=>setDelObjectif(obj)}/>)}</tbody></table></div>}
     {tab==="virements"&&<div className="fade-up"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:0}}>Virements compte commun — {MOIS_FULL[mois]} {annee}</h3><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{MOIS.map((m,i)=><button key={i} className="btn-press" style={mB(mois===i)} onClick={()=>setMois(i)}>{m}</button>)}</div></div><VirementCalcul charges={charges} chargesMontants={chargesMontants} revenus={revenus} annee={annee} mois={mois}/></div>}
+    {tab==="patrimoine"&&<PatrimoineTab finary={finary}/>}
+    {tab==="budget_reel"&&<BudgetReelTab finary={finary} revenus={revenus} chargesMontants={chargesMontants} epargneMontants={epargneMontants}/>}
+    {tab==="placements"&&<ComptesTab finary={finary}/>}
     {tab==="impots"&&<div className="fade-up"><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:20}}>Simulateur Impôt sur le Revenu</h3><TaxSimulator/></div>}
-    {tab==="assistant"&&<div className="fade-up" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:16}}>Assistant budgétaire IA</h3><AIAssistant revenus={revenus} charges={charges} chargesMontants={chargesMontants} epargne={epargne} epargneMontants={epargneMontants} objectifs={objectifs} annee={annee}/></div>}
+    {tab==="assistant"&&<div className="fade-up" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:16}}>Assistant budgétaire IA</h3><AIAssistant revenus={revenus} charges={charges} chargesMontants={chargesMontants} epargne={epargne} epargneMontants={epargneMontants} objectifs={objectifs} annee={annee} finaryData={finary.data}/></div>}
     
     {tab==="immobilier"&&<div className="fade-up">
       <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:28,paddingBottom:20,borderBottom:"1px solid #e8e4dd"}}>

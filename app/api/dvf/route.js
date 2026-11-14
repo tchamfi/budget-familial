@@ -3,6 +3,9 @@
 //   2020-2025 → resource d7933994 (DVF géolocalisé Etalab, mis à jour semestriellement)
 //   2014-2019 → resources par année (DVF brut DGFiP via cadastre.data.gouv.fr)
 // Supabase gardé en fallback pour les stats historiques
+import { getSessionUser, unauthorized } from '../../../lib/session';
+
+export const dynamic = 'force-dynamic';
 
 const TABULAR_BASE = 'https://tabular-api.data.gouv.fr/api/resources';
 
@@ -175,6 +178,7 @@ function mediane(arr) {
 // ─── HANDLER ─────────────────────────────────────────────────────────────────
 
 export async function GET(request) {
+  if (!getSessionUser(request)) return unauthorized();
   const { searchParams } = new URL(request.url);
   const mode    = searchParams.get('mode') || 'rue';
   const commune = searchParams.get('commune');

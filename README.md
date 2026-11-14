@@ -1,22 +1,30 @@
 # Budget Familial 2026 — Tchamfong
 
-Application de suivi budgétaire familial connectée à Airtable.
+Application de suivi budgétaire familial connectée à Airtable et alimentée par Finary.
 
 ## Stack
 
 - **Frontend** : Next.js 14 + React 18 + Recharts
-- **Backend** : Airtable (API REST)
+- **Backend** : routes API Next.js (session, proxy Airtable, assistant IA, DVF)
+- **Données** : Airtable (budget prévu + tables `Finary_*` recopiées chaque semaine depuis Finary)
 - **Hébergement** : Vercel
 
-## Déploiement
+## Sécurité
 
-### Prérequis
+- Le jeton Airtable et la clé Anthropic restent côté serveur. Le navigateur ne les voit jamais.
+- Connexion Google vérifiée côté serveur (`/api/auth/login`), puis cookie de session httpOnly signé (14 jours).
+- Toutes les routes `/api/*` exigent une session valide.
+- Le proxy `/api/airtable` n'ouvre que les tables du budget. Les tables `Finary_*` sont en lecture seule via `/api/finary`.
 
-- Node.js 18+
-- Compte GitHub
-- Compte Vercel (gratuit)
+## Onglets Finary
 
-### Lancer en local
+- **Patrimoine** : patrimoine net, répartition, évolution (un relevé par semaine), patrimoine de chacun avec ou sans la maison, objectifs Finary, prêt.
+- **Budget réel** : revenus et dépenses réels par mois et par catégorie, comparés au budget prévu.
+- **Comptes** : tous les comptes par type et par personne, et les lignes détenues (comptes de Lionel).
+
+Les tables `Finary_*` de la base Airtable sont mises à jour chaque semaine par une tâche planifiée Claude. Ne pas les modifier à la main.
+
+## Lancer en local
 
 ```bash
 npm install
@@ -24,9 +32,16 @@ npm run dev
 # → http://localhost:3000
 ```
 
-### Variables d'environnement
+## Variables d'environnement (Vercel)
 
 | Variable | Valeur |
 |----------|--------|
-| `NEXT_PUBLIC_AIRTABLE_TOKEN` | Ton Personal Access Token Airtable |
-| `NEXT_PUBLIC_AIRTABLE_BASE_ID` | `appRdg7WeaRxPBxsj` |
+| `AIRTABLE_TOKEN` | Personal Access Token Airtable (serveur uniquement, jamais `NEXT_PUBLIC_`) |
+| `AIRTABLE_BASE_ID` | `appRdg7WeaRxPBxsj` |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | ID client OAuth Google (public par nature) |
+| `AUTHORIZED_EMAILS` | Adresses autorisées, séparées par des virgules |
+| `SESSION_SECRET` | Chaîne aléatoire d'au moins 32 caractères (`openssl rand -hex 32`) |
+| `ANTHROPIC_API_KEY` | Clé API Anthropic pour l'assistant |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Données DVF historiques (inchangé) |
+
+`NEXT_PUBLIC_AIRTABLE_TOKEN` et `NEXT_PUBLIC_AIRTABLE_BASE_ID` ne servent plus : supprime-les de Vercel.
