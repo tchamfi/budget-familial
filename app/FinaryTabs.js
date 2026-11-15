@@ -491,9 +491,10 @@ export function BudgetReelTab({ finary, revenus, chargesMontants, epargneMontant
           </div>
           {enCours && <Note warn>{monthLong(month)} n'est pas terminé. Les chiffres couvrent le mois jusqu'à la dernière mise à jour.</Note>}
 
+          {prevu?.has && (
           <div className="fade-up" style={CS}>
             <h3 style={{ ...H3, fontSize: 18 }}>Réel contre prévu, {monthLong(month)}</h3>
-            {prevu?.has ? (
+            {(
               <>
                 <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 18 }}>
                   {[
@@ -524,12 +525,11 @@ export function BudgetReelTab({ finary, revenus, chargesMontants, epargneMontant
                     );
                   })}
                 </div>
-                <Note>Le prévu vient de tes onglets Revenus, Charges et Épargne. Le réel vient de Finary. Les catégories ne correspondent pas une à une : la comparaison porte sur les totaux du mois.</Note>
+                <Note>Le prévu vient du budget saisi dans Airtable (tables Revenus, Charges et Épargne). Le réel vient de Finary. Les catégories ne correspondent pas une à une : la comparaison porte sur les totaux du mois.</Note>
               </>
-            ) : (
-              <Note>Aucun budget prévu saisi pour {monthLong(month)} dans tes onglets Revenus, Charges et Épargne.</Note>
             )}
           </div>
+          )}
 
           <div className="grid-2col">
             <div className="fade-up" style={CS}>
