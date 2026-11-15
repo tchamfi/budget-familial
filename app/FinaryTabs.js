@@ -446,6 +446,234 @@ function PretCard({ pret, syncIso }) {
 }
 
 // ─── Onglet Budget réel ─────────────────────────────────────────────────────
+// ─── Semaine (du dimanche au samedi) ────────────────────────────────────────
+// Dépenses du quotidien : tout sauf les flux fixes ou internes ci-dessous.
+const HORS_QUOTIDIEN = new Set(["investment", "transfer", "loan_payment", "taxes", "bills_and_utilities", "fees", "business_and_work", "income", "refunds"]);
+const JOURS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+const dayLong = (iso) => {
+  const d = new Date(`${iso}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : `${JOURS[d.getDay()]} ${d.getDate() === 1 ? "1er" : d.getDate()} ${MOIS_L[d.getMonth()]}`;
+};
+const deltaPct = (a, b) => (b ? (a - b) / b : null);
+const signed = (x, digits = 0) => (x == null ? "—" : `${x > 0 ? "+" : ""}${pct(x, digits)}`);
+const deltaColor = (x) => (x == null ? C.muted : x > 0.15 ? C.red : x < -0.15 ? C.green : C.ink);
+
+function weekView(rows = []) {
+  const weeks = [...new Set(rows.map((r) => r.debut).filter(Boolean))].sort();
+  if (!weeks.length) return null;
+  const last = weeks[weeks.length - 1];
+  const prev = weeks.length > 1 ? weeks[weeks.length - 2] : null;
+  const of = (d) => rows.filter((r) => r.debut === d);
+  const quot = (rs) => rs.filter((r) => !HORS_QUOTIDIEN.has(r.categorie));
+  const cur = of(last);
+  const prv = prev ? of(prev) : [];
+  const slugs = [...new Set([...quot(cur), ...quot(prv)].map((r) => r.categorie))];
+  const lines = slugs
+    .map((slug) => {
+      const c = cur.find((r) => r.categorie === slug) || {};
+      const p = prv.find((r) => r.categorie === slug);
+      return {
+        slug,
+        libelle: c.libelle || p?.libelle || slug,
+        semaine: c.depenses || 0,
+        transactions: c.transactions || 0,
+        precedente: prev ? p?.depenses || 0 : null,
+        moyenne: c.moyenne_12s ?? null,
+      };
+    })
+    .sort((a, b) => Math.max(b.semaine, b.moyenne || 0) - Math.max(a.semaine, a.moyenne || 0));
+  const hasMoy = lines.some((l) => l.moyenne != null);
+  return {
+    debut: last,
+    fin: cur[0]?.fin,
+    prevDebut: prev,
+    lines,
+    total: sum(lines, (l) => l.semaine),
+    totalPrev: prev ? sum(lines, (l) => l.precedente) : null,
+    totalMoy: hasMoy ? sum(lines, (l) => l.moyenne) : null,
+    hors: cur.filter((r) => HORS_QUOTIDIEN.has(r.categorie) && r.depenses > 0).sort((a, b) => b.depenses - a.depenses),
+    history: weeks.map((wk) => ({ label: frDate(wk).slice(0, 5), total: Math.round(sum(quot(of(wk)), (r) => r.depenses)) })),
+  };
+}
+
+function merchantsView(rows = []) {
+  if (!rows.length) return null;
+  const last = rows.reduce((m, r) => (r.debut > m ? r.debut : m), "");
+  const cur = rows.filter((r) => r.debut === last);
+  const groups = [...new Set(cur.map((r) => r.groupe || "Autres"))];
+  return groups.map((g) => {
+    const rs = cur
+      .filter((r) => (r.groupe || "Autres") === g)
+      .sort((a, b) => (b.depenses || 0) - (a.depenses || 0) || (b.moyenne_12s || 0) - (a.moyenne_12s || 0));
+    return { groupe: g, rows: rs, total: sum(rs, (r) => r.depenses), moyenne: sum(rs, (r) => r.moyenne_12s) };
+  });
+}
+
+function SemaineSection({ data }) {
+  const w = useMemo(() => weekView(data.semaine || []), [data.semaine]);
+  const groups = useMemo(() => merchantsView(data.marchands || []), [data.marchands]);
+  if (!w) return null;
+  const vsPrev = w.totalPrev != null ? deltaPct(w.total, w.totalPrev) : null;
+  const vsMoy = w.totalMoy != null ? deltaPct(w.total, w.totalMoy) : null;
+  const max = Math.max(1, ...w.lines.map((l) => Math.max(l.semaine, l.moyenne || 0, l.precedente || 0)));
+  return (
+    <>
+      <div className="fade-up" style={CS}>
+        <h3 style={{ ...H3, fontSize: 18 }}>Semaine du {dayLong(w.debut)} au {dayLong(w.fin)}</h3>
+        <p style={{ fontSize: 12, color: C.muted, margin: "6px 0 18px", lineHeight: 1.6 }}>
+          Dépenses du quotidien : tout ce qui sort, sauf le prêt, les impôts, les factures, les frais bancaires, les dépenses pro, les virements entre comptes et les placements.
+        </p>
+        <div className="grid-kpi" style={{ marginBottom: 20 }}>
+          <Kpi i={0} label="Dépenses du quotidien" value={eur(w.total)} sub="Cette semaine" color={C.ink} />
+          <Kpi i={1} label="Par rapport à la semaine d'avant" value={signed(vsPrev)} sub={w.totalPrev != null ? `${eur(w.totalPrev)} la semaine du ${dayLong(w.prevDebut)}` : "Pas encore de semaine précédente"} color={deltaColor(vsPrev)} />
+          <Kpi i={2} label="Par rapport à votre moyenne" value={signed(vsMoy)} sub={w.totalMoy != null ? `${eur(w.totalMoy)} par semaine en moyenne sur 12 semaines` : "Moyenne indisponible"} color={deltaColor(vsMoy)} />
+        </div>
+        <div className="table-scroll">
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 620 }}>
+            <thead>
+              <tr>
+                <th style={TH}>Catégorie</th>
+                <th style={{ ...TH, width: "28%" }} />
+                <th style={{ ...TH, textAlign: "right" }}>Cette semaine</th>
+                <th style={{ ...TH, textAlign: "right" }}>Semaine d'avant</th>
+                <th style={{ ...TH, textAlign: "right" }}>Moyenne 12 sem.</th>
+                <th style={{ ...TH, textAlign: "right" }}>Écart</th>
+              </tr>
+            </thead>
+            <tbody>
+              {w.lines.map((l) => {
+                const ecart = l.moyenne ? deltaPct(l.semaine, l.moyenne) : null;
+                return (
+                  <tr key={l.slug} className="row-hover">
+                    <td style={{ ...TD, fontWeight: 600 }}>
+                      {l.libelle}
+                      <div style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>{l.transactions} opération{l.transactions > 1 ? "s" : ""}</div>
+                    </td>
+                    <td style={TD}>
+                      <div style={{ position: "relative", height: 8, background: C.soft, borderRadius: 4 }}>
+                        <div style={{ width: `${(l.semaine / max) * 100}%`, height: "100%", background: C.ink, borderRadius: 4 }} />
+                        {l.moyenne != null && <div title="Moyenne 12 semaines" style={{ position: "absolute", top: -3, left: `calc(${(l.moyenne / max) * 100}% - 1px)`, width: 2, height: 14, background: C.orange }} />}
+                      </div>
+                    </td>
+                    <td style={{ ...TD, textAlign: "right", fontWeight: 700 }}>{eur(l.semaine)}</td>
+                    <td style={{ ...TD, textAlign: "right", color: C.muted }}>{l.precedente != null ? eur(l.precedente) : "—"}</td>
+                    <td style={{ ...TD, textAlign: "right", color: C.muted }}>{eur(l.moyenne)}</td>
+                    <td style={{ ...TD, textAlign: "right", fontWeight: 600, color: ecart == null ? C.muted : ecart > 0.25 ? C.red : ecart < -0.25 ? C.green : C.muted }}>{signed(ecart)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <Note>Le trait orange marque la moyenne des 12 dernières semaines.</Note>
+        {w.hors.length > 0 && (
+          <Note>
+            Hors quotidien cette semaine : {w.hors.map((r) => `${r.libelle} ${eur(r.depenses)}`).join(", ")}.
+          </Note>
+        )}
+        {w.history.length >= 3 && (
+          <div style={{ marginTop: 18 }}>
+            <div style={LBL}>Dépenses du quotidien, semaine par semaine</div>
+            <ResponsiveContainer width="100%" height={180}>
+              <ComposedChart data={w.history} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.soft} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.muted }} />
+                <YAxis tick={{ fontSize: 11, fill: C.muted }} width={44} />
+                <Tooltip formatter={tooltipEur} />
+                <Bar dataKey="total" name="Dépenses du quotidien" fill={C.ink} radius={[4, 4, 0, 0]} />
+                {w.totalMoy != null && <Line type="linear" dataKey={() => Math.round(w.totalMoy)} name="Moyenne 12 sem." stroke={C.orange} strokeDasharray="4 4" dot={false} />}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+        <Note>
+          Semaine du dimanche au samedi, lue chaque dimanche matin. Les banques transmettent certaines opérations avec un à trois jours de retard : la dernière semaine est recalculée le dimanche suivant.
+        </Note>
+      </div>
+
+      {groups && (
+        <div className="fade-up" style={CS}>
+          <h3 style={{ ...H3, fontSize: 18 }}>Commerçants suivis</h3>
+          <p style={{ fontSize: 12, color: C.muted, margin: "6px 0 16px" }}>Même semaine, comparée à la moyenne des 12 dernières semaines.</p>
+          <div className="grid-2col" style={{ gap: 18 }}>
+            {groups.map((g) => (
+              <div key={g.groupe} style={{ border: `1px solid ${C.line}`, borderRadius: 14, padding: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", marginBottom: 10 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700 }}>{g.groupe}</span>
+                  <span style={{ fontSize: 12, color: C.muted }}>
+                    <b style={{ color: C.ink }}>{eur(g.total)}</b> · moyenne {eur(g.moyenne)}
+                  </span>
+                </div>
+                {g.rows.map((r) => (
+                  <div key={r.cle} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 12, fontSize: 13, padding: "6px 0", borderTop: `1px solid ${C.soft}` }}>
+                    <span>{r.marchand}{r.operations ? <span style={{ color: C.muted, fontSize: 11 }}> · {r.operations} op.</span> : null}</span>
+                    <span style={{ fontWeight: 700, color: (r.depenses || 0) > (r.moyenne_12s || 0) * 1.5 && (r.depenses || 0) > 20 ? C.red : C.ink }}>{eur(r.depenses)}</span>
+                    <span style={{ color: C.muted, minWidth: 64, textAlign: "right" }}>{eur(r.moyenne_12s)}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <Note>
+            Recherche sur le libellé des opérations bancaires : un commerçant dont le libellé diffère n'apparaît pas, et « Uber » regroupe courses VTC et repas. Pour changer la liste, modifie la table Finary_Marchands_Suivis dans Airtable : elle est relue chaque dimanche.
+          </Note>
+        </div>
+      )}
+    </>
+  );
+}
+
+function PlafondsSection({ data }) {
+  const v = useMemo(() => {
+    const cur = (data.budgetMois || []).find((b) => b.en_cours);
+    const rows = (data.budgetCategories || []).filter((c) => cur && c.mois === cur.cle && c.objectif != null);
+    return { cur, rows };
+  }, [data]);
+  const syncIso = synthese(data, "derniere_synchro").texte;
+  if (!v.rows.length) {
+    return (
+      <div className="fade-up" style={{ ...CS, padding: 18 }}>
+        <div style={{ fontSize: 13, fontWeight: 700 }}>Plafonds du mois</div>
+        <Note>
+          Aucun plafond défini. Dans l'app Finary, fixe un objectif mensuel sur les catégories du quotidien (Alimentation, Loisirs, Transports…). Ils s'afficheront ici après la mise à jour du dimanche.
+        </Note>
+      </div>
+    );
+  }
+  const ref = syncIso ? new Date(syncIso) : new Date();
+  const daysInMonth = new Date(ref.getFullYear(), ref.getMonth() + 1, 0).getDate();
+  const pace = Math.min(1, ref.getDate() / daysInMonth);
+  return (
+    <div className="fade-up" style={CS}>
+      <h3 style={{ ...H3, fontSize: 18 }}>Plafonds de {monthLong(v.cur.cle)}</h3>
+      <p style={{ fontSize: 12, color: C.muted, margin: "6px 0 16px" }}>
+        Au {ref.getDate()} {MOIS_L[ref.getMonth()]}, {pct(pace)} du mois est écoulé. Le trait marque ce rythme.
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {v.rows
+          .sort((a, b) => (b.depenses || 0) / (b.objectif || 1) - (a.depenses || 0) / (a.objectif || 1))
+          .map((r) => {
+            const ratio = r.objectif ? (r.depenses || 0) / r.objectif : 0;
+            const color = r.objectif_plancher ? (ratio >= pace ? C.green : C.orange) : ratio > 1 ? C.red : ratio > pace + 0.1 ? C.orange : C.green;
+            return (
+              <div key={r.cle}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13 }}>
+                  <span style={{ fontWeight: 600 }}>{r.libelle}{r.objectif_plancher ? <span style={{ color: C.muted, fontWeight: 400 }}> · minimum à atteindre</span> : null}</span>
+                  <span><b style={{ color }}>{eur(r.depenses)}</b> <span style={{ color: C.muted }}>sur {eur(r.objectif)}</span></span>
+                </div>
+                <div style={{ position: "relative", height: 8, background: C.soft, borderRadius: 4, marginTop: 6 }}>
+                  <div style={{ width: `${Math.min(1, ratio) * 100}%`, height: "100%", background: color, borderRadius: 4 }} />
+                  <div style={{ position: "absolute", top: -3, left: `calc(${pace * 100}% - 1px)`, width: 2, height: 14, background: C.ink }} />
+                </div>
+              </div>
+            );
+          })}
+      </div>
+      <Note>Objectifs fixés dans Finary. Montants du mois à la dernière mise à jour.</Note>
+    </div>
+  );
+}
+
 export function BudgetReelTab({ finary, revenus, chargesMontants, epargneMontants }) {
   const d = finary.data;
   const [sel, setSel] = useState(null);
@@ -477,6 +705,9 @@ export function BudgetReelTab({ finary, revenus, chargesMontants, epargneMontant
       {v && s && (
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           <TabHeader title="Budget réel" finary={finary} />
+          <SemaineSection data={d} />
+          <PlafondsSection data={d} />
+          <h3 style={{ ...H3, fontSize: 18, marginTop: 8 }}>Analyse par mois</h3>
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
             {v.catMonths.map((m) => (
               <button key={m} className="btn-press" style={chip(m === month)} onClick={() => setSel(m)}>{monthShort(m)}</button>
@@ -820,6 +1051,17 @@ export function finaryContext(d) {
     }
     const rec = synthese(d, "charges_recurrentes_mensuelles").valeur;
     if (rec != null) s += `Charges récurrentes détectées par Finary : ${eur(rec)} par mois (hors charges annuelles).\n`;
+    const w = weekView(d.semaine || []);
+    if (w) {
+      s += `Semaine du ${dayLong(w.debut)} au ${dayLong(w.fin)} : dépenses du quotidien ${eur(w.total)}`;
+      if (w.totalPrev != null) s += `, semaine précédente ${eur(w.totalPrev)}`;
+      if (w.totalMoy != null) s += `, moyenne des 12 dernières semaines ${eur(w.totalMoy)}`;
+      s += `. Détail : ${w.lines.map((l) => `${l.libelle} ${eur(l.semaine)}${l.moyenne != null ? ` (moyenne ${eur(l.moyenne)})` : ""}`).join(", ")}.\n`;
+    }
+    const groups = merchantsView(d.marchands || []);
+    if (groups) {
+      s += `Commerçants suivis la même semaine (semaine / moyenne hebdo 12 semaines) : ${groups.flatMap((g) => g.rows).map((r) => `${r.marchand} ${eur(r.depenses)} / ${eur(r.moyenne_12s)}`).join(", ")}.\n`;
+    }
     s += `Attention : dans Finary, les virements entre comptes et les versements en placements comptent comme des dépenses. Les mois avant juin 2026 semblent incomplets.\n`;
     return s;
   } catch {
