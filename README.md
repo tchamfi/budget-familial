@@ -19,10 +19,10 @@ Application de suivi budgétaire familial connectée à Airtable et alimentée p
 ## Onglets Finary
 
 - **Patrimoine** : patrimoine net, répartition, évolution (un relevé par semaine), patrimoine de chacun avec ou sans la maison, objectifs Finary, prêt.
-- **Budget réel** : revenus et dépenses réels par mois et par catégorie, comparés au budget prévu.
+- **Budget réel** : la semaine écoulée (dimanche au samedi) comparée à la semaine d'avant et à la moyenne des 12 dernières semaines, les commerçants suivis, les plafonds Finary du mois, puis revenus et dépenses réels par mois et par catégorie.
 - **Comptes** : tous les comptes par type et par personne, et les lignes détenues (comptes de Lionel).
 
-Les tables `Finary_*` de la base Airtable sont mises à jour chaque semaine par une tâche planifiée Claude. Ne pas les modifier à la main.
+Les tables `Finary_*` de la base Airtable sont mises à jour chaque dimanche à 6 h par une tâche planifiée Claude. Ne pas les modifier à la main, sauf `Finary_Marchands_Suivis` : c'est la liste des commerçants suivis (nom affiché, texte recherché dans le libellé des opérations, groupe, case « actif »). Elle est prise en compte au passage suivant.
 
 ## Lancer en local
 
