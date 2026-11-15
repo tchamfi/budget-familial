@@ -478,7 +478,7 @@ function Alerts({revenus,chargesMontants,epargneMontants,annee,mois}){
 }
 
 export default function BudgetApp(){
-  const[user,setUser]=useState(null);const[authChecked,setAuthChecked]=useState(false);const[tab,setTab]=useState("dashboard");const[loading,setLoading]=useState(true);const[saving,setSaving]=useState(false);const[mois,setMois]=useState(new Date().getMonth());const[annee,setAnnee]=useState(2026);const[chartType,setChartType]=useState("bar");
+  const[user,setUser]=useState(null);const[authChecked,setAuthChecked]=useState(false);const[tab,setTab]=useState("patrimoine");const[loading,setLoading]=useState(true);const[saving,setSaving]=useState(false);const[mois,setMois]=useState(new Date().getMonth());const[annee,setAnnee]=useState(2026);const[chartType,setChartType]=useState("bar");
   const[revenus,setRevenus]=useState([]);const[charges,setCharges]=useState([]);const[chargesMontants,setChargesMontants]=useState([]);const[epargne,setEpargne]=useState([]);const[epargneMontants,setEpargneMontants]=useState([]);const[objectifs,setObjectifs]=useState([]);
   const[showAddCharge,setShowAddCharge]=useState(false);const[showAddEpargne,setShowAddEpargne]=useState(false);
   const[showAddVersement,setShowAddVersement]=useState(false);
@@ -550,145 +550,16 @@ export default function BudgetApp(){
   const bG={padding:"8px 16px",background:"transparent",color:"#8a8578",border:"1px solid #ddd8d0",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:500};
   const bD={padding:"5px 10px",background:"transparent",color:"#b91c1c",border:"1px solid #f5c6c6",borderRadius:7,cursor:"pointer",fontSize:10,fontWeight:600};
   const mB=(a)=>({padding:"7px 14px",border:a?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:a?700:400,background:a?"rgba(26,26,46,0.06)":"#fff",color:a?"#1a1a2e":"#8a8578"});
-  const tabs=[["dashboard","Tableau de bord"],["patrimoine","Patrimoine"],["budget_reel","Budget réel"],["placements","Comptes"],["revenus","Revenus"],["charges","Charges"],["epargne","Épargne"],["objectifs","Objectifs"],["virements","Virements"],["impots","Simulateur IR"],["assistant","Assistant IA"],["immobilier","🏠 Immobilier"]];
+  const tabs=[["patrimoine","Patrimoine"],["budget_reel","Budget réel"],["placements","Comptes"],["impots","Simulateur IR"],["assistant","Assistant IA"],["immobilier","🏠 Immobilier"]];
   return(<><GlobalStyles/><div className="grain"/><div style={{minHeight:"100vh",background:"#faf9f7"}}>
     {saving&&<div className="fade-in" style={{position:"fixed",bottom:24,right:24,background:"#1a1a2e",color:"#faf9f7",padding:"10px 20px",borderRadius:12,fontSize:13,fontWeight:600,boxShadow:"0 8px 30px rgba(26,26,46,0.2)",zIndex:2000,display:"flex",alignItems:"center",gap:8}}><div style={{width:8,height:8,borderRadius:"50%",background:"#4ade80",animation:"pulse 1s infinite"}}/>Sauvegarde...</div>}
     <div style={{background:"#1a1a2e",padding:"0 max(16px,calc((100% - 1320px)/2 + 36px))",position:"sticky",top:0,zIndex:100}}><div className="header-inner">
-      <div style={{display:"flex",alignItems:"center",gap:16}}><div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#2d2b55,#44427a)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#faf9f7" strokeWidth="2" strokeLinecap="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div><div><div style={{fontFamily:"'DM Serif Display',serif",color:"#faf9f7",fontSize:18}}>Budget Familial</div><div style={{color:"#7a7890",fontSize:11,fontWeight:500}}>Tchamfong · {annee}</div></div></div>
-      <div className="header-right" style={{display:"flex",alignItems:"center",gap:14}}><div style={{display:"flex",gap:2,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:3}}>{availYears.map(y=><button key={y} className="btn-press" onClick={()=>handleInitYear(y)} style={{padding:"5px 14px",border:"none",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:annee===y?700:400,background:annee===y?"#fff":"transparent",color:annee===y?"#1a1a2e":"#7a7890"}}>{y}</button>)}</div>
-      <select value={mois} onChange={e=>setMois(+e.target.value)} style={{padding:"7px 12px",background:"rgba(255,255,255,0.06)",color:"#faf9f7",border:"1px solid rgba(255,255,255,0.1)",borderRadius:9,fontSize:12,outline:"none",fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>{MOIS_FULL.map((m,i)=><option key={i} value={i} style={{background:"#1a1a2e"}}>{m}</option>)}</select>
-      <div style={{width:1,height:28,background:"rgba(255,255,255,0.1)"}}/>
+      <div style={{display:"flex",alignItems:"center",gap:16}}><div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#2d2b55,#44427a)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#faf9f7" strokeWidth="2" strokeLinecap="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div><div><div style={{fontFamily:"'DM Serif Display',serif",color:"#faf9f7",fontSize:18}}>Budget Familial</div><div style={{color:"#7a7890",fontSize:11,fontWeight:500}}>Tchamfong</div></div></div>
+      <div className="header-right" style={{display:"flex",alignItems:"center",gap:14}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>{user.picture&&<img src={user.picture} style={{width:30,height:30,borderRadius:8,objectFit:"cover",border:"2px solid rgba(255,255,255,0.1)"}} alt="" referrerPolicy="no-referrer"/>}<div><div style={{color:"#faf9f7",fontSize:12,fontWeight:600}}>{user.name?.split(" ")[0]}</div><button onClick={logout} style={{background:"none",border:"none",color:"#7a7890",fontSize:10,cursor:"pointer",padding:0,fontFamily:"'DM Sans',sans-serif"}}>Déconnexion</button></div></div></div>
     </div></div>
     <div style={{background:"#fff",borderBottom:"1px solid #e8e4dd",position:"sticky",top:68,zIndex:99}}><div className="nav-wrap">{tabs.map(([k,l])=><button key={k} className="btn-press" onClick={()=>setTab(k)} style={{padding:"8px 14px",border:"none",borderRadius:9,cursor:"pointer",fontSize:13,fontWeight:600,background:tab===k?"#1a1a2e":"transparent",color:tab===k?"#faf9f7":"#8a8578",whiteSpace:"nowrap",position:"relative"}}>{l}</button>)}</div></div>
     <div className="content-wrap">
-    {tab==="dashboard"&&<div style={{display:"flex",flexDirection:"column",gap:24}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:0}}>{MOIS_FULL[mois]} {annee}</h3><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{MOIS.map((m,i)=><button key={i} className="btn-press" style={mB(mois===i)} onClick={()=>setMois(i)}>{m}</button>)}</div></div>
-      <div className="grid-kpi">{[["Revenus",rev.lionel+rev.ophelie+(rev.prime_lionel||0)+(rev.prime_ophelie||0),prevRev.lionel+prevRev.ophelie+(prevRev.prime_lionel||0)+(prevRev.prime_ophelie||0),"#1e40af"],["Charges",chgT,prevChg,"#b91c1c"],["Épargne",epT,prevEp,"#6d28d9"],["Solde",solde,prevSolde,solde>=0?"#15803d":"#b91c1c"]].map(([label,val,prev,color],i)=>{const diff=val-prev;const pct=prev>0?((diff/prev)*100).toFixed(0):0;const diffColor=diff>0?"#15803d":diff<0?"#b91c1c":"#8a8578";const arrowPath=diff>0?"M7 14l5-5 5 5":diff<0?"M7 10l5 5 5-5":"M5 12h14";const showArrow=hasPrevData&&prev>0;return<div key={label} className={`card-hover fade-up stagger-${i+1}`} style={{...CS,borderTop:`3px solid ${color}`,position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:-20,right:-20,width:80,height:80,borderRadius:"50%",background:`${color}08`}}/><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><span style={{fontSize:11,fontWeight:600,color:"#8a8578",textTransform:"uppercase",letterSpacing:"0.08em"}}>{label}</span></div><div style={{fontFamily:"'DM Serif Display',serif",fontSize:28,color}}>{fmt(val)}</div>{showArrow&&<div style={{display:"flex",alignItems:"center",gap:4,marginTop:8}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={diffColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d={arrowPath}/></svg><span style={{fontSize:11,fontWeight:600,color:diffColor}}>{diff>0?"+":""}{pct}% vs {MOIS[prevM]}{prevAnnee!==annee?` ${prevAnnee}`:""}</span></div>}</div>})}</div>
-      <div className="fade-up stagger-3" style={CS}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:0}}>Évolution {annee}</h3><div style={{display:"flex",gap:3,background:"#f2efeb",borderRadius:9,padding:3}}>{[["bar","Barres"],["line","Lignes"],["area","Aires"]].map(([t,l])=><button key={t} className="btn-press" onClick={()=>setChartType(t)} style={{padding:"5px 14px",border:"none",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:chartType===t?600:400,background:chartType===t?"#fff":"transparent",color:chartType===t?"#1a1a2e":"#8a8578"}}>{l}</button>)}</div></div>
-        <ResponsiveContainer width="100%" height={300}>{chartType==="bar"?<BarChart data={chartData} barGap={2}><CartesianGrid strokeDasharray="3 3" stroke="#f2efeb" vertical={false}/><XAxis dataKey="mois" tick={{fontSize:11,fill:"#8a8578"}} axisLine={false} tickLine={false}/><YAxis tick={{fontSize:11,fill:"#8a8578"}} axisLine={false} tickLine={false}/><Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:12,border:"none",boxShadow:"0 4px 20px rgba(0,0,0,0.08)"}}/><Legend wrapperStyle={{fontSize:12}}/><Bar dataKey="revenus" fill="#1e40af" name="Revenus" radius={[6,6,0,0]} maxBarSize={28}/><Bar dataKey="charges" fill="#b91c1c" name="Charges" radius={[6,6,0,0]} maxBarSize={28}/><Bar dataKey="epargne" fill="#6d28d9" name="Épargne" radius={[6,6,0,0]} maxBarSize={28}/></BarChart>:chartType==="line"?<LineChart data={chartData}><CartesianGrid strokeDasharray="3 3" stroke="#f2efeb" vertical={false}/><XAxis dataKey="mois" tick={{fontSize:11,fill:"#8a8578"}} axisLine={false} tickLine={false}/><YAxis tick={{fontSize:11,fill:"#8a8578"}} axisLine={false} tickLine={false}/><Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:12,border:"none",boxShadow:"0 4px 20px rgba(0,0,0,0.08)"}}/><Legend wrapperStyle={{fontSize:12}}/><Line type="monotone" dataKey="revenus" stroke="#1e40af" strokeWidth={2.5} dot={{r:3}} name="Revenus"/><Line type="monotone" dataKey="charges" stroke="#b91c1c" strokeWidth={2.5} dot={{r:3}} name="Charges"/><Line type="monotone" dataKey="epargne" stroke="#6d28d9" strokeWidth={2.5} dot={{r:3}} name="Épargne"/></LineChart>:<AreaChart data={chartData}><CartesianGrid strokeDasharray="3 3" stroke="#f2efeb" vertical={false}/><XAxis dataKey="mois" tick={{fontSize:11,fill:"#8a8578"}} axisLine={false} tickLine={false}/><YAxis tick={{fontSize:11,fill:"#8a8578"}} axisLine={false} tickLine={false}/><Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:12,border:"none",boxShadow:"0 4px 20px rgba(0,0,0,0.08)"}}/><Legend wrapperStyle={{fontSize:12}}/><Area type="monotone" dataKey="revenus" fill="#1e40af" fillOpacity={0.08} stroke="#1e40af" strokeWidth={2} name="Revenus"/><Area type="monotone" dataKey="charges" fill="#b91c1c" fillOpacity={0.08} stroke="#b91c1c" strokeWidth={2} name="Charges"/><Area type="monotone" dataKey="epargne" fill="#6d28d9" fillOpacity={0.08} stroke="#6d28d9" strokeWidth={2} name="Épargne"/></AreaChart>}</ResponsiveContainer></div>
-      <div className="grid-2col">
-        <div className="fade-up stagger-2" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:18,margin:"0 0 16px"}}>Répartition — {MOIS_FULL[mois]}</h3><ResponsiveContainer width="100%" height={260}><PieChart><Pie data={pieData} cx="50%" cy="50%" outerRadius={95} innerRadius={50} dataKey="value" label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} style={{fontSize:10}}>{pieData.map((e,i)=><Cell key={i} fill={CAT_COLORS[e.name]||CHART_COLORS[i%CHART_COLORS.length]}/>)}</Pie><Tooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:12,border:"none",boxShadow:"0 4px 20px rgba(0,0,0,0.08)"}}/></PieChart></ResponsiveContainer></div>
-        <div className="fade-up stagger-3" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:18,margin:"0 0 16px"}}>Objectifs {annee}</h3><div style={{display:"flex",flexDirection:"column",gap:16}}>{objectifs.map(obj=>{const type=obj.fields?.type||"",target=obj.fields?.objectif_annuel||0;const actual=emByYear.reduce((s,em)=>{const e=epargne.find(e=>{const l=em.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===e.id;});if(!e)return s;if(type.includes(e.fields.type)&&(type.includes(e.fields.beneficiaire)||type.includes("Commun")))return s+(em.fields.montant||0);return s;},0);const pct=target>0?(actual/target)*100:0;return(<div key={obj.id}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:6}}><span style={{fontWeight:600}}>{type}</span><span style={{color:"#8a8578"}}>{fmt(actual)} / {fmt(target)}</span></div><div style={{height:6,borderRadius:3,background:"#f2efeb",overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:pct>=100?"linear-gradient(90deg,#15803d,#22c55e)":"linear-gradient(90deg,#1a1a2e,#44427a)",borderRadius:3,transition:"width .6s cubic-bezier(.4,0,.2,1)"}}/></div></div>);})}</div></div>
-      </div>
-    </div>}
-    {tab==="revenus"&&<div className="fade-up" style={CS}>
-  <h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:"0 0 4px"}}>Revenus {annee}</h3>
-  <p style={{fontSize:12,color:"#8a8578",marginBottom:20}}>Salaires mensuels + primes ponctuelles incluses dans le total</p>
-  <table style={{width:"100%",borderCollapse:"collapse"}}>
-    <thead><tr>
-      <th style={thS}>Mois</th>
-      <th style={{...thS,textAlign:"right"}}>Lionel <span style={{fontWeight:400,color:"#8a8578",fontSize:10}}>(salaire)</span></th>
-      <th style={{...thS,textAlign:"right"}}>Prime Lionel</th>
-      <th style={{...thS,textAlign:"right"}}>Ophélie <span style={{fontWeight:400,color:"#8a8578",fontSize:10}}>(salaire)</span></th>
-      <th style={{...thS,textAlign:"right"}}>Prime Ophélie</th>
-      <th style={{...thS,textAlign:"right"}}>Total</th>
-      <th style={{...thS,width:100}}></th>
-    </tr></thead>
-    <tbody>{MOIS_FULL.map((m,i)=>{const r=getRevMois(i);return(
-      <RevEditRow key={i} label={m}
-        lionel={r.lionel} primeLionel={r.prime_lionel||0}
-        ophelie={r.ophelie} primeOphelie={r.prime_ophelie||0}
-        tdS={tdS} iS={iS} bP={bP} bG={bG}
-        onSave={async(l,pl,o,po)=>{await save(async()=>{
-          if(r.id){
-            await updateRecord("Revenus",r.id,{lionel:l,ophelie:o,prime_lionel:pl,prime_ophelie:po});
-            setRevenus(p=>p.map(x=>x.id===r.id?{...x,fields:{...x.fields,lionel:l,ophelie:o,prime_lionel:pl,prime_ophelie:po}}:x));
-          }
-        });}}
-      />
-    );})}</tbody>
-    <tfoot><tr style={{fontWeight:700}}>
-      <td style={{...tdS,fontFamily:"'DM Serif Display',serif"}}>Total annuel</td>
-      <td style={{...tdS,textAlign:"right"}}>{fmt(revByYear.reduce((s,r)=>s+(r.fields?.lionel||0),0))}</td>
-      <td style={{...tdS,textAlign:"right",color:"#c9a84c"}}>{fmt(revByYear.reduce((s,r)=>s+(r.fields?.prime_lionel||0),0))}</td>
-      <td style={{...tdS,textAlign:"right"}}>{fmt(revByYear.reduce((s,r)=>s+(r.fields?.ophelie||0),0))}</td>
-      <td style={{...tdS,textAlign:"right",color:"#c9a84c"}}>{fmt(revByYear.reduce((s,r)=>s+(r.fields?.prime_ophelie||0),0))}</td>
-      <td style={{...tdS,textAlign:"right",fontFamily:"'DM Serif Display',serif"}}>{fmt(revByYear.reduce((s,r)=>s+(r.fields?.lionel||0)+(r.fields?.prime_lionel||0)+(r.fields?.ophelie||0)+(r.fields?.prime_ophelie||0),0))}</td>
-      <td style={tdS}/>
-    </tr></tfoot>
-  </table>
-</div>}
-    {tab==="charges"&&<div style={{display:"flex",flexDirection:"column",gap:18}}>
-      <div className="fade-up" style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:0}}>Charges — {MOIS_FULL[mois]} {annee}</h3><div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{MOIS.map((m,i)=><button key={i} className="btn-press" style={mB(mois===i)} onClick={()=>setMois(i)}>{m}</button>)}</div><button className="btn-press" onClick={()=>setShowAddCharge(true)} style={{...bP,padding:"9px 18px"}}>+ Ajouter</button></div></div>
-      {Object.entries(chargesByCat).map(([cat,chgs])=>{const ac=chgs.filter(c=>{const cm=getCM(c.id,mois);return cm&&(cm.lionel+cm.ophelie)>0;});const catT=ac.reduce((s,c)=>{const cm=getCM(c.id,mois);return s+(cm?cm.lionel+cm.ophelie:0);},0);if(ac.length===0)return null;return(<div key={cat} className="fade-up card-hover" style={CS}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><div style={{display:"inline-flex",alignItems:"center",gap:8}}><div style={{width:10,height:10,borderRadius:3,background:CAT_COLORS[cat]||"#8a8578"}}/><span style={{fontSize:13,fontWeight:700}}>{cat}</span></div><span style={{fontFamily:"'DM Serif Display',serif",fontSize:16,color:CAT_COLORS[cat]||"#1a1a2e"}}>{fmt(catT)}</span></div><table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th style={thS}>Description</th><th style={{...thS,width:90}}>Compte</th><th style={{...thS,textAlign:"right",width:100}}>Lionel</th><th style={{...thS,textAlign:"right",width:100}}>Ophélie</th><th style={{...thS,textAlign:"right",width:90}}>Total</th><th style={{...thS,width:90}}></th></tr></thead><tbody>{ac.map(c=>{const cm=getCM(c.id,mois);return<ChgRow key={c.id} charge={c} l={cm?.lionel||0} o={cm?.ophelie||0} tdS={tdS} iS={iS} bP={bP} bG={bG} bD={bD} onSave={async(l,o,newCompte)=>{await save(async()=>{if(cm?.id){await updateRecord("Charges_Montants",cm.id,{lionel:l,ophelie:o});setChargesMontants(p=>p.map(r=>r.id===cm.id?{...r,fields:{...r.fields,lionel:l,ophelie:o}}:r));}if(newCompte!==c.fields?.compte){await updateRecord("Charges",c.id,{compte:newCompte});setCharges(p=>p.map(r=>r.id===c.id?{...r,fields:{...r.fields,compte:newCompte}}:r));}});}} onDelete={()=>setDelCharge(c)}/>;})}</tbody></table></div>);})}
-      <div className="fade-up" style={{...CS,borderTop:"3px solid #1a1a2e"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><span style={{fontFamily:"'DM Serif Display',serif",fontSize:18}}>Total charges — {MOIS_FULL[mois]}</span></div><div style={{display:"flex",gap:24,alignItems:"center"}}><div style={{textAlign:"right"}}><div style={{fontSize:10,color:"#8a8578",textTransform:"uppercase",fontWeight:600,letterSpacing:"0.08em"}}>Lionel</div><div style={{fontSize:18,fontWeight:700,fontVariantNumeric:"tabular-nums"}}>{fmt(cmByYear.filter(r=>r.fields?.mois===mois+1).reduce((s,r)=>s+(r.fields?.lionel||0),0))}</div></div><div style={{textAlign:"right"}}><div style={{fontSize:10,color:"#8a8578",textTransform:"uppercase",fontWeight:600,letterSpacing:"0.08em"}}>Ophélie</div><div style={{fontSize:18,fontWeight:700,fontVariantNumeric:"tabular-nums"}}>{fmt(cmByYear.filter(r=>r.fields?.mois===mois+1).reduce((s,r)=>s+(r.fields?.ophelie||0),0))}</div></div><div style={{textAlign:"right"}}><div style={{fontSize:10,color:"#8a8578",textTransform:"uppercase",fontWeight:600,letterSpacing:"0.08em"}}>Total</div><div style={{fontFamily:"'DM Serif Display',serif",fontSize:24,color:"#b91c1c"}}>{fmt(chgT)}</div></div></div></div></div>
-    </div>}
-    {tab==="epargne"&&<div style={{display:"flex",flexDirection:"column",gap:18}}>
-      <div className="fade-up" style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:0}}>Épargne — {MOIS_FULL[mois]} {annee}</h3><div style={{display:"flex",gap:10,flexWrap:"wrap"}}><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{MOIS.map((m,i)=><button key={i} className="btn-press" style={mB(mois===i)} onClick={()=>setMois(i)}>{m}</button>)}</div><button className="btn-press" onClick={()=>setShowAddEpargne(true)} style={{...bP,padding:"9px 18px"}}>+ Ajouter</button></div></div>
-      <div className="fade-up" style={CS}><table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th style={thS}>Type</th><th style={thS}>Bénéficiaire</th><th style={{...thS,textAlign:"right",width:120}}>Montant</th><th style={{...thS,textAlign:"right",width:130}}>Cumul {annee}</th><th style={{...thS,width:130}}></th></tr></thead><tbody>{epargne.sort((a,b)=>(a.fields?.ordre||0)-(b.fields?.ordre||0)).map(ep=>{const em=getEM(ep.id,mois);const cumul=emByYear.filter(r=>{const l=r.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===ep.id;}).reduce((s,r)=>s+(r.fields?.montant||0),0);return<EpRow key={ep.id} ep={ep} montant={em?.montant||0} cumul={cumul} tdS={tdS} iS={iS} bP={bP} bG={bG} bD={bD} onSave={async v=>{await save(async()=>{if(em?.id){await updateRecord("Epargne_montants",em.id,{montant:v});setEpargneMontants(p=>p.map(r=>r.id===em.id?{...r,fields:{...r.fields,montant:v}}:r));}});}} onDelete={()=>setDelEpargne(ep)}/>;})}</tbody><tfoot><tr style={{fontWeight:700}}><td style={tdS} colSpan={2}><span style={{fontFamily:"'DM Serif Display',serif"}}>Total</span></td><td style={{...tdS,textAlign:"right"}}>{fmt(totalEpMois(mois))}</td><td style={{...tdS,textAlign:"right"}}>{fmt(emByYear.reduce((s,r)=>s+(r.fields?.montant||0),0))}</td><td style={tdS}/></tr></tfoot></table></div>
-      <div className="fade-up" style={{...CS,borderTop:"2px dashed #e8dcc8"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-          <div>
-            <h4 style={{fontFamily:"'DM Serif Display',serif",fontSize:16,margin:"0 0 2px"}}>💰 Versements ponctuels</h4>
-            <p style={{fontSize:11,color:"#8a8578",margin:0}}>Primes, bonus, héritages investis — non récurrents</p>
-          </div>
-          <button className="btn-press" style={{...bP,padding:"7px 14px",fontSize:12}} onClick={()=>setShowAddVersement(true)}>+ Ajouter</button>
-        </div>
-        {versementsPonctuels.filter(v=>{const d=v.fields?.date||"";return d.startsWith(String(annee));}).length===0
-          ?<div style={{textAlign:"center",padding:"20px 0",color:"#c4b898",fontSize:13}}>Aucun versement ponctuel pour {annee}</div>
-          :<table style={{width:"100%",borderCollapse:"collapse"}}>
-            <thead><tr>
-              <th style={thS}>Description</th>
-              <th style={{...thS,textAlign:"right",width:80}}>Mois</th>
-              <th style={{...thS,textAlign:"right",width:130}}>Montant</th>
-              <th style={{...thS,width:80}}></th>
-            </tr></thead>
-            <tbody>{versementsPonctuels.filter(v=>{const d=v.fields?.date||"";return d.startsWith(String(annee));}).map((v,i)=>(
-              <tr key={v.id} className="row-hover">
-                <td style={{...tdS,fontWeight:600}}>{v.fields?.label}</td>
-                <td style={{...tdS,textAlign:"right",color:"#8a8578"}}>{v.fields?.date?new Date(v.fields.date+"T12:00:00").toLocaleDateString("fr-FR",{month:"short",year:"numeric"}):""}{v.fields?.destination?" · "+v.fields.destination:""}</td>
-                <td style={{...tdS,textAlign:"right",fontWeight:700,color:"#16a34a"}}>{fmt(v.fields?.montant||0)}</td>
-                <td style={tdS}><button className="btn-press" style={bD} onClick={()=>supprimerVersement(v.id)}>Suppr.</button></td>
-              </tr>
-            ))}</tbody>
-            <tfoot><tr style={{fontWeight:700}}>
-              <td style={{...tdS,fontFamily:"'DM Serif Display',serif"}} colSpan={2}>Total ponctuels {annee}</td>
-              <td style={{...tdS,textAlign:"right",fontFamily:"'DM Serif Display',serif",color:"#16a34a"}}>{fmt(versementsPonctuels.filter(v=>{const d=v.fields?.date||"";return d.startsWith(String(annee));}).reduce((s,v)=>s+(v.fields?.montant||0),0))}</td>
-              <td style={tdS}/>
-            </tr></tfoot>
-          </table>
-        }
-        {showAddVersement&&<div style={{marginTop:16,padding:16,background:"#f9f5ee",borderRadius:12,display:"grid",gridTemplateColumns:"1fr auto auto auto",gap:10,alignItems:"end"}}>
-          <div>
-            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#8a8578",marginBottom:4,textTransform:"uppercase"}}>Description</label>
-            <input style={{...iS,width:"100%"}} placeholder="Prime Generali, bonus annuel…" value={nvDesc} onChange={e=>setNvDesc(e.target.value)}/>
-          </div>
-          <div>
-            <label style={{fontSize:10,color:"#8a8578",fontWeight:600,textTransform:"uppercase",display:"block",marginBottom:4}}>Destination</label>
-            <input style={{...iS,width:"100%"}} placeholder="PEA, LDDS, AV…" value={nvDest||""} onChange={e=>setNvDest(e.target.value)}/>
-          </div>
-          <div>
-            <label style={{fontSize:10,color:"#8a8578",fontWeight:600,textTransform:"uppercase",display:"block",marginBottom:4}}>Bénéficiaire</label>
-            <select style={{...iS,width:"100%"}} value={nvBenef||"Foyer"} onChange={e=>setNvBenef(e.target.value)}>
-              {["Lionel","Ophélie","Foyer","Enfants"].map(b=><option key={b}>{b}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={{fontSize:10,color:"#8a8578",fontWeight:600,textTransform:"uppercase",display:"block",marginBottom:4}}>Source</label>
-            <select style={{...iS,width:"100%"}} value={nvSource||"Prime"} onChange={e=>setNvSource(e.target.value)}>
-              {["Prime","Héritage","Remboursement","Vente bien","Autre"].map(s=><option key={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#8a8578",marginBottom:4,textTransform:"uppercase"}}>Mois</label>
-            <select style={{...iS,cursor:"pointer"}} value={nvMois} onChange={e=>setNvMois(+e.target.value)}>
-              {MOIS_FULL.map((m,i)=><option key={i} value={i+1}>{m}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={{display:"block",fontSize:11,fontWeight:600,color:"#8a8578",marginBottom:4,textTransform:"uppercase"}}>Montant (€)</label>
-            <input style={{...iS,width:110,textAlign:"right"}} type="number" value={nvMontant} onChange={e=>setNvMontant(+e.target.value)}/>
-          </div>
-          <div style={{display:"flex",gap:6}}>
-            <button className="btn-press" style={bP} onClick={ajouterVersement}>OK</button>
-            <button className="btn-press" style={bG} onClick={()=>{setShowAddVersement(false);setNvDesc("");setNvMontant(0);}}>X</button>
-          </div>
-        </div>}
-      </div>
-    </div>}
-    {tab==="objectifs"&&<div className="fade-up" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:"0 0 20px"}}>Objectifs {annee}</h3><table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th style={thS}>Type</th><th style={{...thS,textAlign:"right",width:150}}>Objectif</th><th style={{...thS,textAlign:"right",width:150}}>Réalisé</th><th style={{...thS,width:200}}>Progression</th><th style={{...thS,width:130}}></th></tr></thead><tbody>{objectifs.map(obj=><ObjRow key={obj.id} obj={obj} epargne={epargne} emByYear={emByYear} tdS={tdS} iS={iS} bP={bP} bG={bG} bD={bD} onSave={async v=>{await save(async()=>{await updateRecord("Objectifs",obj.id,{objectif_annuel:v});setObjectifs(p=>p.map(r=>r.id===obj.id?{...r,fields:{...r.fields,objectif_annuel:v}}:r));});}} onDelete={()=>setDelObjectif(obj)}/>)}</tbody></table></div>}
-    {tab==="virements"&&<div className="fade-up"><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,margin:0}}>Virements compte commun — {MOIS_FULL[mois]} {annee}</h3><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{MOIS.map((m,i)=><button key={i} className="btn-press" style={mB(mois===i)} onClick={()=>setMois(i)}>{m}</button>)}</div></div><VirementCalcul charges={charges} chargesMontants={chargesMontants} revenus={revenus} annee={annee} mois={mois}/></div>}
     {tab==="patrimoine"&&<PatrimoineTab finary={finary}/>}
     {tab==="budget_reel"&&<BudgetReelTab finary={finary} revenus={revenus} chargesMontants={chargesMontants} epargneMontants={epargneMontants}/>}
     {tab==="placements"&&<ComptesTab finary={finary}/>}
