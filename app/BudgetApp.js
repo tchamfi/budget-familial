@@ -90,7 +90,9 @@ function GlobalStyles(){return(<style dangerouslySetInnerHTML={{__html:`
     .nav-wrap{padding:8px 16px;}
   }
   @media(max-width:768px){
-    .sim-grid{grid-template-columns:1fr!important;}
+    .sim-grid{grid-template-columns:minmax(0,1fr)!important;}
+    .sim-grid>div{min-width:0;}
+    .sim-grid input,.sim-grid select{min-width:0;}
     .tax-grid{grid-template-columns:1fr!important;}
     .virement-grid{grid-template-columns:1fr!important;}
   }
@@ -574,7 +576,7 @@ export default function BudgetApp(){
           <p style={{fontSize:13,color:"#8a8578",marginTop:2}}>Capacité d&apos;emprunt · Annonces Val-de-Marne · Scénarios · Villes</p>
         </div>
       </div>
-      <SimulateurImmobilier/>
+      <SimulateurImmobilier pret={(finary.data?.pret||[])[0]}/>
     </div>}
     </div>
     <div style={{textAlign:"center",padding:"40px 0 24px",color:"#c4c0b8",fontSize:11}}>Budget Familial Tchamfong · {new Date().getFullYear()}</div>
@@ -592,7 +594,15 @@ export default function BudgetApp(){
 // SIMULATEUR IMMOBILIER
 // ============================================================
 
-const TAUX = { 15: 2.85, 20: 3.05, 25: 3.20 };
+// Repères de taux moyens hors assurance (Pretto, novembre 2026). Le taux se saisit librement dans le simulateur.
+const TAUX_REPERE = { 15: 3.56, 20: 3.76, 25: 3.85 };
+const TAUX_REPERE_DATE = "novembre 2026";
+const SIMU_KEY = "bf_simu_immo_v1";
+const pct = (n, d = 2) => `${Number(n || 0).toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d })} %`;
+
+function loadSimu() {
+  try { return JSON.parse(window.localStorage.getItem(SIMU_KEY) || "{}") || {}; } catch { return {}; }
+}
 
 const VILLES = [
   { nom: 'Saint-Mandé',           insee: '94067', prixM2: 9800, securite: 5, transport: ['Métro 1'] },
@@ -635,67 +645,97 @@ function calcMensualite(capital, tauxAnnuel, dureeAns) {
   if (capital <= 0) return 0;
   const tm = tauxAnnuel / 100 / 12;
   const n  = dureeAns * 12;
+  if (tm <= 0) return capital / n;
   return capital * (tm * Math.pow(1 + tm, n)) / (Math.pow(1 + tm, n) - 1);
 }
 
-function calcCapacite(mensualite, tauxAnnuel, dureeAns) {
+// Capital empruntable pour une mensualité donnée. Si tauxAssurance > 0, la mensualité
+// inclut l'assurance (calculée chaque mois sur le capital emprunté), comme le veut la règle HCSF.
+function calcCapacite(mensualite, tauxAnnuel, dureeAns, tauxAssurance = 0) {
   if (mensualite <= 0) return 0;
   const tm = tauxAnnuel / 100 / 12;
   const n  = dureeAns * 12;
-  return mensualite * ((1 - Math.pow(1 + tm, -n)) / tm);
+  const facteur = tm > 0 ? tm / (1 - Math.pow(1 + tm, -n)) : 1 / n;
+  return mensualite / (facteur + tauxAssurance / 100 / 12);
 }
 
-function SimulateurImmobilier() {
+function SimulateurImmobilier({ pret }) {
+  const saved = useMemo(() => loadSimu(), []);
   const [activeTab, setActiveTab] = useState('simulation');
-  const [revLionel,   setRevLionel]   = useState(3900);
-  const [revOphelie,  setRevOphelie]  = useState(4200);
-  const [tauxPAS,     setTauxPAS]     = useState(13.4);
-  const [chargesFixes,setChargesFixes]= useState(3614);
-  const [apportPerso, setApportPerso] = useState(30000);
+  const [revLionel,   setRevLionel]   = useState(saved.revLionel ?? 3900);
+  const [revOphelie,  setRevOphelie]  = useState(saved.revOphelie ?? 4200);
+  const [tauxPAS,     setTauxPAS]     = useState(saved.tauxPAS ?? 13.4);
+  const [chargesFixes,setChargesFixes]= useState(saved.chargesFixes ?? 3614);
+  const [apportPerso, setApportPerso] = useState(saved.apportPerso ?? 30000);
   const [mensActuelle,setMensActuelle]= useState(1692);
   const [crd,         setCrd]         = useState(312000);
-  const [prixVente,   setPrixVente]   = useState(510000);
-  const [duree,       setDuree]       = useState(25);
-  const [surfaceMin,  setSurfaceMin]  = useState(100);
-  const [nbChambres,  setNbChambres]  = useState(4);
-  const [vendMaison,          setVendMaison]          = useState(true);
-  // modeCalc supprimé — mode unique : mensualité choisie
-  const [mensualiteSouhaitee, setMensualiteSouhaitee] = useState(2500);
-  const [filterSecurite, setFilterSecurite] = useState(4);
-  const [filterBudget,   setFilterBudget]   = useState(600000);
+  const [tauxActuel,  setTauxActuel]  = useState(1.6);
+  const [prixVente,   setPrixVente]   = useState(saved.prixVente ?? 510000);
+  const [duree,       setDuree]       = useState(saved.duree ?? 25);
+  const [taux,        setTaux]        = useState(saved.taux ?? TAUX_REPERE[saved.duree ?? 25]);
+  const [tauxManuel,  setTauxManuel]  = useState(saved.tauxManuel ?? false);
+  const [tauxAssurance, setTauxAssurance] = useState(saved.tauxAssurance ?? 0.2);
+  const [surfaceMin,  setSurfaceMin]  = useState(saved.surfaceMin ?? 100);
+  const [nbChambres,  setNbChambres]  = useState(saved.nbChambres ?? 4);
+  const [vendMaison,          setVendMaison]          = useState(saved.vendMaison ?? true);
+  const [mensualiteSouhaitee, setMensualiteSouhaitee] = useState(saved.mensualiteSouhaitee ?? 2500);
+
+  // Prêt actuel : repris de Finary (mis à jour chaque dimanche), modifiable ensuite.
+  const pretApplique = useRef(false);
+  useEffect(() => {
+    if (!pret || pretApplique.current) return;
+    pretApplique.current = true;
+    if (pret.capital_restant > 0) setCrd(Math.round(pret.capital_restant));
+    if (pret.mensualite > 0) setMensActuelle(Math.round(pret.mensualite));
+    if (pret.taux > 0) setTauxActuel(pret.taux);
+  }, [pret]);
+
+  // Les saisies sont gardées dans ce navigateur. Le prêt actuel vient de Finary, il n'est pas gardé.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIMU_KEY, JSON.stringify({ revLionel, revOphelie, tauxPAS, chargesFixes, apportPerso, prixVente, duree, taux, tauxManuel, tauxAssurance, surfaceMin, nbChambres, vendMaison, mensualiteSouhaitee }));
+    } catch {}
+  }, [revLionel, revOphelie, tauxPAS, chargesFixes, apportPerso, prixVente, duree, taux, tauxManuel, tauxAssurance, surfaceMin, nbChambres, vendMaison, mensualiteSouhaitee]);
+
+  const changeDuree = (d) => {
+    setDuree(d);
+    if (!tauxManuel) setTaux(TAUX_REPERE[d]);
+  };
+  const tauxRepere = TAUX_REPERE[duree];
 
   const calc = useCallback(() => {
     const revTotal    = revLionel + revOphelie;
     const revAvantPAS = revTotal / (1 - tauxPAS / 100);
     const mensMaxHCSF = revAvantPAS * 0.35;
-    let soldeVente = 0, fraisAgence = 0, ira = 0;
-    if (vendMaison) {
-      fraisAgence = prixVente * 0.04;
-      ira         = Math.min(crd * 0.03, mensActuelle * 6);
-      soldeVente  = Math.max(0, prixVente - crd - fraisAgence - ira);
-    }
+    const fraisAgence = prixVente * 0.04;
+    // IRA légales : au plus 6 mois d'intérêts sur le capital remboursé, et au plus 3 % du capital restant dû.
+    const ira = Math.min(crd * 0.03, crd * (tauxActuel / 100) / 2);
+    const soldeVentePotentiel = Math.max(0, prixVente - crd - fraisAgence - ira);
+    const soldeVente = vendMaison ? soldeVentePotentiel : 0;
     const apportTotal = apportPerso + soldeVente;
     let mensDisponible = mensMaxHCSF;
     if (!vendMaison) mensDisponible = mensMaxHCSF - mensActuelle;
-    const mensualiteUtilisee = Math.min(mensualiteSouhaitee, mensDisponible);
-    const taux     = TAUX[duree];
-    const capacite = calcCapacite(mensualiteUtilisee, taux, duree);
+    const mensualiteUtilisee = Math.max(0, Math.min(mensualiteSouhaitee, mensDisponible));
+    const capacite = calcCapacite(mensualiteUtilisee, taux, duree, tauxAssurance);
     const budgetTotal = capacite + apportTotal;
     const budgetNet   = budgetTotal / 1.08;
-    const emprunt  = budgetTotal - apportTotal;
-    const mensFinal= calcMensualite(emprunt, taux, duree);
+    const emprunt  = capacite;
+    const mensCredit    = calcMensualite(emprunt, taux, duree);
+    const mensAssurance = emprunt * tauxAssurance / 100 / 12;
+    const mensFinal     = mensCredit + mensAssurance;
     const endett   = revAvantPAS > 0 ? (mensFinal + (vendMaison ? 0 : mensActuelle)) / revAvantPAS * 100 : 0;
-    const coutCredit  = mensFinal * duree * 12 - emprunt;
+    const coutCredit    = mensCredit * duree * 12 - emprunt;
+    const coutAssurance = mensAssurance * duree * 12;
     const resteAVivre = revTotal - mensFinal - (vendMaison ? 0 : mensActuelle) - chargesFixes;
-    return { revTotal, revAvantPAS, mensMaxHCSF, soldeVente, fraisAgence, ira, apportTotal, mensualiteUtilisee, mensDisponible, taux, capacite, budgetTotal, budgetNet, emprunt, mensFinal, endett, coutCredit, resteAVivre };
-  }, [revLionel, revOphelie, tauxPAS, chargesFixes, apportPerso, mensActuelle, crd, prixVente, duree, vendMaison, mensualiteSouhaitee]);
+    return { revTotal, revAvantPAS, mensMaxHCSF, soldeVente, soldeVentePotentiel, fraisAgence, ira, apportTotal, mensualiteUtilisee, mensDisponible, taux, tauxAssurance, capacite, budgetTotal, budgetNet, emprunt, mensCredit, mensAssurance, mensFinal, endett, coutCredit, coutAssurance, resteAVivre };
+  }, [revLionel, revOphelie, tauxPAS, chargesFixes, apportPerso, mensActuelle, crd, tauxActuel, prixVente, duree, taux, tauxAssurance, vendMaison, mensualiteSouhaitee]);
 
   const r = calc();
 
   return (
     <div style={styles.root}>
       <div style={styles.headerBadges}>
-        <span style={styles.badge('#d4af37', '#7a5c00')}>🏦 Taux {TAUX[duree].toFixed(2)}%</span>
+        <span style={styles.badge('#d4af37', '#7a5c00')}>🏦 Taux {pct(taux)} + assurance {pct(tauxAssurance)}</span>
         <span style={styles.badge(r.endett <= 25 ? '#d1fae5' : r.endett <= 35 ? '#fef3c7' : '#fee2e2', r.endett <= 25 ? '#065f46' : r.endett <= 35 ? '#92400e' : '#991b1b')}>Endettement {r.endett.toFixed(1)}%</span>
       </div>
       <div style={styles.tabs}>
@@ -707,7 +747,7 @@ function SimulateurImmobilier() {
       {activeTab === 'simulation' && (
         <div style={styles.simGrid} className="sim-grid">
           <div>
-            <Card title="⚙️ Mensualité souhaitée">
+            <Card title="⚙️ Mensualité souhaitée, assurance comprise">
               {/* En-tête : valeur actuelle + badge max */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                 <div>
@@ -745,7 +785,7 @@ function SimulateurImmobilier() {
                 <span>{fmt(r.mensMaxHCSF)}</span>
               </div>
               <p style={{ fontSize: 11, color: '#8a9ab0', marginTop: 10 }}>
-                Règle HCSF : max 35% du revenu brut avant PAS • Revenu brut estimé : {fmt(r.revAvantPAS)}/mois
+                Règle HCSF : mensualités et assurance au plus à 35 % du revenu net avant impôt • Revenu net avant impôt estimé : {fmt(r.revAvantPAS)}/mois
               </p>
             </Card>
             <Card title="💰 Revenus du foyer">
@@ -764,16 +804,29 @@ function SimulateurImmobilier() {
                 <span style={{ fontSize: 14, color: '#2d4a6d' }}>Je vends ma maison avant d&apos;acheter</span>
               </div>
               <div style={styles.formGrid}>
-                <FormField label="Mensualité crédit actuel" suffix="€/mois"><NumInput value={mensActuelle} onChange={setMensActuelle}/></FormField>
-                <FormField label="Capital restant dû" hint="Rang 88 du tableau (avril 2026)" suffix="€"><NumInput value={crd} onChange={setCrd}/></FormField>
-                {vendMaison && <FormField label="Prix de vente estimé" hint="72m² Carrez + 35m² niv.0 • Plateau Fontenay" suffix="€" full><NumInput value={prixVente} onChange={setPrixVente}/></FormField>}
+                <FormField label="Mensualité crédit actuel" hint={pret ? "Finary, hors assurance. Ajoute l'assurance si tu gardes la maison" : "Assurance comprise si tu gardes la maison"} suffix="€/mois"><NumInput value={mensActuelle} onChange={setMensActuelle}/></FormField>
+                <FormField label="Capital restant dû" hint={pret ? "Repris de Finary, mis à jour chaque dimanche" : "Voir le tableau d'amortissement"} suffix="€"><NumInput value={crd} onChange={setCrd}/></FormField>
+                <FormField label="Taux du prêt actuel" hint="Sert au calcul des indemnités de remboursement anticipé" suffix="%"><NumInput value={tauxActuel} onChange={setTauxActuel} step={0.01}/></FormField>
+                {vendMaison && <FormField label="Prix de vente estimé" hint="72m² Carrez + 35m² niv.0 • Plateau Fontenay" suffix="€"><NumInput value={prixVente} onChange={setPrixVente}/></FormField>}
               </div>
             </Card>
             {vendMaison && <EstimationBienDVF prixVente={prixVente} onPrixChange={setPrixVente}/>}
             <Card title="📈 Paramètres du prêt">
               <div style={styles.formGrid}>
                 <FormField label="Apport personnel (hors vente)" hint="PEE Ophélie, épargne…" suffix="€"><NumInput value={apportPerso} onChange={setApportPerso}/></FormField>
-                <FormField label="Durée du prêt"><select value={duree} onChange={e => setDuree(+e.target.value)} style={styles.select}><option value={15}>15 ans (2.85%)</option><option value={20}>20 ans (3.05%)</option><option value={25}>25 ans (3.20%)</option></select></FormField>
+                <FormField label="Durée du prêt" hint="25 ans maximum selon la règle HCSF"><select value={duree} onChange={e => changeDuree(+e.target.value)} style={styles.select}><option value={15}>15 ans</option><option value={20}>20 ans</option><option value={25}>25 ans</option></select></FormField>
+                <div>
+                  <FormField label="Taux du prêt, hors assurance" suffix="%">
+                    <NumInput value={taux} step={0.01} onChange={v => { setTaux(v); setTauxManuel(true); }}/>
+                  </FormField>
+                  <p style={styles.hint}>
+                    Repère {TAUX_REPERE_DATE} sur {duree} ans : {pct(tauxRepere)}
+                    {Math.abs(taux - tauxRepere) > 0.0001 && (
+                      <button type="button" onClick={() => { setTaux(tauxRepere); setTauxManuel(false); }} style={{ marginLeft: 6, padding: 0, border: 'none', background: 'none', color: '#c9a84c', fontSize: 11, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Appliquer</button>
+                    )}
+                  </p>
+                </div>
+                <FormField label="Assurance emprunteur" hint="Par an, du capital emprunté, pour vous deux. Mets le taux de ton devis" suffix="%/an"><NumInput value={tauxAssurance} onChange={setTauxAssurance} step={0.01}/></FormField>
                 <FormField label="Surface recherchée" suffix="m²"><NumInput value={surfaceMin} onChange={setSurfaceMin}/></FormField>
                 <FormField label="Nombre de chambres"><select value={nbChambres} onChange={e => setNbChambres(+e.target.value)} style={styles.select}><option value={3}>3 chambres</option><option value={4}>4 chambres</option><option value={5}>5 chambres</option></select></FormField>
               </div>
@@ -799,13 +852,16 @@ function SimulateurImmobilier() {
               <ApportRow label="APPORT TOTAL" value={fmt(r.apportTotal)} total color="#16a34a"/>
             </Card>
             <Card>
-              <ApportRow label="Revenus avant PAS" value={fmt(r.revAvantPAS) + '/mois'}/>
-              <ApportRow label="Mensualité max HCSF (35%)" value={fmt(r.mensMaxHCSF) + '/mois'}/>
+              <ApportRow label="Revenu net avant impôt" value={fmt(r.revAvantPAS) + '/mois'}/>
+              <ApportRow label="Mensualité max HCSF (35 %)" value={fmt(r.mensMaxHCSF) + '/mois'}/>
               <ApportRow label="Capacité d'emprunt" value={fmt(r.capacite)}/>
               <div style={{ borderTop: '1px solid #e8dcc8', marginTop: 8, paddingTop: 8 }}>
-                <ApportRow label="Mensualité finale" value={fmt(r.mensFinal) + '/mois'} bold color="#c9a84c"/>
+                <ApportRow label={`Mensualité crédit (${pct(r.taux)})`} value={fmt(r.mensCredit) + '/mois'} indent/>
+                <ApportRow label={`Assurance (${pct(r.tauxAssurance)}/an)`} value={fmt(r.mensAssurance) + '/mois'} indent/>
+                <ApportRow label="Mensualité totale" value={fmt(r.mensFinal) + '/mois'} bold color="#c9a84c"/>
               </div>
-              <ApportRow label="Coût total du crédit" value={fmt(r.coutCredit)} color="#d97706"/>
+              <ApportRow label="Coût des intérêts" value={fmt(r.coutCredit)} color="#d97706"/>
+              <ApportRow label="Coût de l'assurance" value={fmt(r.coutAssurance)} color="#d97706"/>
               <ApportRow label="Reste à vivre" value={fmt(r.resteAVivre) + '/mois'} color={r.resteAVivre >= 2000 ? '#16a34a' : r.resteAVivre >= 1500 ? '#d97706' : '#dc2626'}/>
             </Card>
             <Card>
@@ -821,7 +877,7 @@ function SimulateurImmobilier() {
                 <div style={styles.progressLabels}><span>0%</span><span>Confort : 25%</span><span style={{ color: '#ef4444' }}>Max : 35%</span><span>45%</span></div>
               </div>
               <div style={{ ...styles.statusBadge, background: r.endett <= 35 ? '#d1fae5' : '#fee2e2', color: r.endett <= 35 ? '#065f46' : '#991b1b' }}>
-                {r.endett <= 35 ? '✓ Conforme HCSF — Financement validé' : '✗ Dépasse 35% — Financement refusé'}
+                {r.endett <= 35 ? '✓ Dans la limite HCSF de 35 %' : '✗ Au-dessus de 35 % : hors règle HCSF, sauf dérogation de la banque'}
               </div>
             </Card>
           </div>
@@ -832,8 +888,8 @@ function SimulateurImmobilier() {
       {activeTab === 'scenarios' && (
         <div>
           <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a3a5c', marginBottom: 20 }}>Comparaison des scénarios</h3>
-          <ScenariosGrid r={r} duree={duree} chargesFixes={chargesFixes} vendMaison={vendMaison} apportPerso={apportPerso} mensActuelle={mensActuelle} crd={crd} prixVente={prixVente}/>
-          <div style={{ ...styles.infoBox, marginTop: 20 }}><span>💡</span><span><strong>Recommandation :</strong> Le scénario &quot;Vente puis achat&quot; est le plus sûr. Tu récupères l'apport de la vente et tu n'as qu'un seul crédit à gérer. Le scénario investissement locatif nécessite un taux d'endettement actuel très bas.</span></div>
+          <ScenariosGrid r={r} duree={duree} chargesFixes={chargesFixes} apportPerso={apportPerso} mensActuelle={mensActuelle}/>
+          <div style={{ ...styles.infoBox, marginTop: 20 }}><span>💡</span><span><strong>À savoir :</strong> &quot;Vente puis achat&quot; te donne l&apos;apport de la vente et un seul crédit. En vendant, tu rembourses ton prêt actuel à {pct(tauxActuel)} et tu empruntes à {pct(taux)}. &quot;Garder + investir&quot; ne compte pas les loyers : la banque en retient en général une partie dans tes revenus.</span></div>
         </div>
       )}
 
@@ -841,26 +897,24 @@ function SimulateurImmobilier() {
 
       {activeTab === 'marche' && <MarcheImmobilier r={r} surfaceMin={surfaceMin} nbChambres={nbChambres} styles={styles}/>}
 
-      <div style={styles.footer}>Simulation indicative • Données DVF Val-de-Marne 2024-2025 • Taux avril 2026 • Règles HCSF (35% max)</div>
+      <div style={styles.footer}>Simulation indicative • Taux saisi par toi, repères {TAUX_REPERE_DATE} (moyennes hors assurance) • Règles HCSF : 35 % assurance comprise, 25 ans max • Frais de notaire estimés à 8 %, hors frais de garantie et de dossier</div>
     </div>
   );
 }
 
-function ScenariosGrid({ r, duree, chargesFixes, apportPerso, mensActuelle, crd, prixVente }) {
-  const taux = TAUX[duree];
-  const fraisAgence = prixVente * 0.04;
-  const ira = Math.min(crd * 0.03, mensActuelle * 6);
-  const soldeVente = Math.max(0, prixVente - crd - fraisAgence - ira);
-  const apportTotal = apportPerso + soldeVente;
+function ScenariosGrid({ r, duree, chargesFixes, apportPerso, mensActuelle }) {
+  const { taux, tauxAssurance } = r;
+  // Solde de la vente calculé dans le simulateur (frais d'agence et IRA déduits), même si l'option "je vends" est coupée.
+  const apportTotal = apportPerso + r.soldeVentePotentiel;
   const mensMax1 = r.revAvantPAS * 0.35;
-  const cap1 = calcCapacite(mensMax1, taux, duree);
+  const cap1 = calcCapacite(mensMax1, taux, duree, tauxAssurance);
   const budget1 = (cap1 + apportTotal) / 1.08;
   const mensConfort = r.revAvantPAS * 0.25;
-  const cap3 = calcCapacite(mensConfort, taux, duree);
+  const cap3 = calcCapacite(mensConfort, taux, duree, tauxAssurance);
   const budget3 = (cap3 + apportTotal) / 1.08;
   const rav3 = r.revTotal - mensConfort - chargesFixes;
   const mensMax2 = r.revAvantPAS * 0.35 - mensActuelle;
-  const cap2 = mensMax2 > 0 ? calcCapacite(mensMax2, taux, duree) : 0;
+  const cap2 = mensMax2 > 0 ? calcCapacite(mensMax2, taux, duree, tauxAssurance) : 0;
   const budget2 = (cap2 + apportPerso) / 1.08;
   const endett2 = mensMax2 > 0 ? ((mensMax2 + mensActuelle) / r.revAvantPAS * 100) : 100;
   const scenarios = [
