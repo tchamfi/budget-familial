@@ -156,12 +156,12 @@ function Gate({ finary, children }) {
     <div className="fade-up" style={{ ...CS, textAlign: "center", padding: 48 }}>
       {finary.error ? (
         <>
-          <div style={{ ...H3, fontSize: 18 }}>Données Finary indisponibles</div>
+          <div style={{ ...H3, fontSize: 18 }}>Données indisponibles</div>
           <p style={{ color: C.muted, fontSize: 13, margin: "10px 0 18px" }}>{finary.error}</p>
           <button className="btn-press" onClick={() => finary.reload(true)} style={{ padding: "8px 18px", background: C.ink, color: "#faf9f7", border: "none", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Réessayer</button>
         </>
       ) : (
-        <p style={{ color: C.muted, fontSize: 14 }}>Chargement des données Finary…</p>
+        <p style={{ color: C.muted, fontSize: 14 }}>Chargement des données…</p>
       )}
     </div>
   );
@@ -585,7 +585,7 @@ function SemaineSection({ data }) {
         )}
         {w.history.length >= 3 && (
           <div style={{ marginTop: 18 }}>
-            <div style={LBL}>Dépenses du quotidien, semaine par semaine</div>
+            <div style={LBL}>Dépenses du quotidien, semaine par semaine (6 derniers mois)</div>
             <ResponsiveContainer width="100%" height={180}>
               <ComposedChart data={w.history} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.soft} />
