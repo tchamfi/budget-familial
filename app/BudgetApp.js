@@ -118,7 +118,7 @@ function LoginPage({onLogin}){
 // L'assistant ne s'appuie que sur les données réelles Finary. Le budget prévisionnel saisi dans Airtable
 // en mars 2026 n'est plus modifiable sur le site : il n'est plus envoyé, pour éviter des réponses périmées.
 function AIAssistant({finaryData}){
-  const[msgs,setMsgs]=useState([{role:"assistant",content:"Bonjour ! Je réponds à partir de vos données Finary, mises à jour chaque dimanche : patrimoine, budget réel par mois, dépenses de la semaine, objectifs et prêt."}]);
+  const[msgs,setMsgs]=useState([{role:"assistant",content:"Bonjour ! Je réponds à partir de vos données Finary, mises à jour chaque dimanche : patrimoine, budget réel par mois, dépenses de la semaine, objectifs et prêt. Pour le marché immobilier, je consulte aussi les données publiques de data.gouv.fr (ventes DVF)."}]);
   const[input,setInput]=useState("");
   const[loading,setLoading]=useState(false);
   const endRef=useRef(null);
@@ -128,10 +128,17 @@ function AIAssistant({finaryData}){
     const ctx=finaryContext(finaryData);
     return `Tu es l'assistant budgétaire de la famille Tchamfong (Lionel, Ophélie et leurs trois filles). Nous sommes le ${today}.
 Règles :
-- Appuie-toi uniquement sur les données réelles Finary ci-dessous. Il n'existe pas d'autre budget de référence.
+- Pour les finances du foyer, appuie-toi uniquement sur les données réelles Finary ci-dessous. Il n'existe pas d'autre budget de référence.
 - Si une donnée manque, dis-le clairement. N'invente aucun chiffre et ne fais pas passer une estimation pour une donnée.
 - Distingue les mois complets du mois en cours, qui est partiel. Pour une enveloppe ou un budget mensuel, pars de la moyenne des derniers mois complets, pas d'un seul mois.
 - Réponds en français, en texte simple : phrases courtes, listes avec des tirets si besoin, pas de tableau, pas de titre, pas de gras.
+
+Données publiques (outils data.gouv.fr, lecture seule) :
+- Sers-t'en seulement pour le marché immobilier ou une autre donnée publique, jamais pour les finances du foyer.
+- Ventes immobilières : jeu « Demandes de valeurs foncières géolocalisées » (identifiant 5cc1b94a634f4165e96436c1). Liste ses ressources pour trouver le fichier de l'année voulue, puis interroge-le en filtrant sur code_commune et type_local = Maison, par pages de 50 lignes au plus. Ne télécharge jamais un fichier entier.
+- Prix au m² = valeur_fonciere / surface_reelle_bati. Une même vente peut occuper plusieurs lignes (même id_mutation) : compte-la une seule fois.
+- Codes des communes suivies : Sucy-en-Brie 94071, Maisons-Alfort 94046, Le Perreux-sur-Marne 94058, Bry-sur-Marne 94015, Créteil 94028, Fontenay-sous-Bois 94033.
+- Donne toujours la source, la période et le nombre de ventes derrière un chiffre. Si ce nombre est faible, dis-le.
 ${ctx||"\nAucune donnée Finary n'a pu être chargée. Dis-le et propose de recharger la page."}`;
   };
   const send=async()=>{
@@ -145,15 +152,19 @@ ${ctx||"\nAucune donnée Finary n'a pu être chargée. Dis-le et propose de rech
       })});
       const data=await res.json();
       if(data.error){setMsgs(p=>[...p,{role:"assistant",content:`⚠️ ${data.error}`}]);}
-      else{const text=data.content?.map(c=>c.text||"").join("")||"Désolé, je n'ai pas pu analyser vos données.";setMsgs(p=>[...p,{role:"assistant",content:text}]);}
+      else{
+        const text=data.content?.map(c=>c.text||"").join("\n\n").trim()||"Désolé, je n'ai pas pu analyser vos données.";
+        const source=data.datagouvIndisponible?"data.gouv.fr ne répondait pas : réponse sans les données publiques.":data.datagouv>0?`Données publiques consultées sur data.gouv.fr (${data.datagouv} requête${data.datagouv>1?"s":""}${data.datagouvErreurs?`, dont ${data.datagouvErreurs} en erreur`:""}).`:null;
+        setMsgs(p=>[...p,{role:"assistant",content:text,source}]);
+      }
     }catch(e){setMsgs(p=>[...p,{role:"assistant",content:"Erreur de connexion. Réessayez."}]);}
     setLoading(false);
   };
-  const suggestions=["Quelle est notre enveloppe mensuelle ?","Où dépensons-nous le plus ce mois-ci ?","Quel est notre taux d'épargne réel ?","Où en sont nos objectifs Finary ?"];
+  const suggestions=["Quelle est notre enveloppe mensuelle ?","Où dépensons-nous le plus ce mois-ci ?","Quel est notre taux d'épargne réel ?","Prix des maisons vendues à Sucy-en-Brie en 2025 ?"];
   return(<div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 180px)",maxHeight:700}}>
     <div style={{flex:1,overflowY:"auto",padding:"20px 0",display:"flex",flexDirection:"column",gap:16}}>
       {msgs.map((m,i)=><div key={i} className="fade-up" style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
-        <div style={{maxWidth:"80%",padding:"14px 18px",borderRadius:m.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.role==="user"?"#1a1a2e":"#fff",color:m.role==="user"?"#faf9f7":"#1a1a2e",fontSize:14,lineHeight:1.6,boxShadow:"0 2px 8px rgba(0,0,0,0.04)",border:m.role==="user"?"none":"1px solid #e8e4dd",whiteSpace:"pre-wrap"}}>{m.content}</div>
+        <div style={{maxWidth:"80%",padding:"14px 18px",borderRadius:m.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",background:m.role==="user"?"#1a1a2e":"#fff",color:m.role==="user"?"#faf9f7":"#1a1a2e",fontSize:14,lineHeight:1.6,boxShadow:"0 2px 8px rgba(0,0,0,0.04)",border:m.role==="user"?"none":"1px solid #e8e4dd",whiteSpace:"pre-wrap"}}>{m.content}{m.source&&<div style={{marginTop:10,paddingTop:8,borderTop:"1px solid #f2efeb",fontSize:11,color:"#8a8578",whiteSpace:"normal"}}>{m.source}</div>}</div>
       </div>)}
       {loading&&<div style={{display:"flex",justifyContent:"flex-start"}}><div style={{padding:"14px 18px",borderRadius:"16px 16px 16px 4px",background:"#fff",border:"1px solid #e8e4dd",boxShadow:"0 2px 8px rgba(0,0,0,0.04)"}}><span className="typing-dot"/><span className="typing-dot"/><span className="typing-dot"/></div></div>}
       <div ref={endRef}/>

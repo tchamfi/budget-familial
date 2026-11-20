@@ -15,7 +15,8 @@ Application de suivi budgétaire familial connectée à Airtable et alimentée p
 - Connexion Google vérifiée côté serveur (`/api/auth/login`), puis cookie de session httpOnly signé (14 jours).
 - Toutes les routes `/api/*` exigent une session valide.
 - Le site ne fait que lire Airtable, côté serveur, via `/api/finary`. Il n'a plus d'accès en écriture depuis le navigateur.
-- L'ancien budget prévisionnel (tables Revenus, Charges, Épargne, Objectifs) n'est plus utilisé par le site.
+- L'ancien budget prévisionnel a été archivé en CSV puis retiré d'Airtable (novembre 2026).
+- L'assistant IA peut consulter les données publiques de data.gouv.fr (ventes DVF) via le serveur MCP officiel, en lecture seule. Si ce serveur ne répond pas, l'assistant répond sans lui.
 
 ## Onglets Finary
 
@@ -43,6 +44,7 @@ npm run dev
 | `AUTHORIZED_EMAILS` | Adresses autorisées, séparées par des virgules |
 | `SESSION_SECRET` | Chaîne aléatoire d'au moins 32 caractères (`openssl rand -hex 32`) |
 | `ANTHROPIC_API_KEY` | Clé API Anthropic pour l'assistant |
+| `DATAGOUV_MCP_URL` | Facultative. Serveur MCP de data.gouv.fr utilisé par l'assistant (par défaut `https://mcp.data.gouv.fr/mcp`). Mettre `off` pour le couper |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Facultatives. Ancienne base DVF, utilisée seulement par le mode `stats` de `/api/dvf`, qu'aucun écran n'appelle |
 
 `NEXT_PUBLIC_AIRTABLE_TOKEN` et `NEXT_PUBLIC_AIRTABLE_BASE_ID` ne servent plus : supprime-les de Vercel.
