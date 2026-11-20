@@ -203,31 +203,43 @@ function peopleView(comptes, snap) {
     };
   });
 }
+// Lecture d'un mois Finary. Les totaux Finary comptent les virements et les placements
+// comme des dépenses : on les sépare pour obtenir ce que le foyer gagne, dépense et épargne.
 function monthStats(m, budgetMois, cats) {
   const rows = cats.filter((c) => c.mois === m);
   const g = (slug) => rows.find((r) => r.categorie === slug) || {};
   const b = budgetMois.find((x) => x.cle === m) || {};
-  const placements = g("investment").depenses || 0;
-  const virements = g("transfer").depenses || 0;
+  const revenusActivite = g("income").revenus || 0;
+  const remboursements = g("refunds").revenus || 0;
+  const placementsVerses = g("investment").depenses || 0;
+  const placementsRetires = g("investment").revenus || 0;
+  const virementsSortis = g("transfer").depenses || 0;
+  const virementsRecus = g("transfer").revenus || 0;
+  const vieBrut = (b.depenses || 0) - placementsVerses - virementsSortis;
+  const vie = vieBrut - remboursements;
+  const placements = placementsVerses - placementsRetires;
+  const virementsNets = virementsRecus - virementsSortis;
+  const autresEntrees = (b.revenus || 0) - revenusActivite - remboursements - placementsRetires - virementsRecus;
+  const epargne = revenusActivite - vie;
   return {
     m,
     rows,
     b,
-    revenusActivite: g("income").revenus || 0,
-    remboursements: g("refunds").revenus || 0,
+    revenusActivite,
+    remboursements,
+    placementsVerses,
+    placementsRetires,
     placements,
-    virements,
-    vie: (b.depenses || 0) - placements - virements,
+    virementsSortis,
+    virementsRecus,
+    virementsNets,
+    autresEntrees,
+    vieBrut,
+    vie,
+    epargne,
+    // Pas de taux pour un mois en cours : les revenus arrivent souvent en fin de mois.
+    tauxEpargne: revenusActivite > 0 && !b.en_cours ? (epargne / revenusActivite) * 100 : null,
   };
-}
-function prevuPour(cle, revenus = [], chargesMontants = [], epargneMontants = []) {
-  const y = +cle.slice(0, 4);
-  const m = +cle.slice(5, 7);
-  const rv = revenus.find((r) => r.fields?.annee === y && r.fields?.mois === m);
-  const rev = rv ? (rv.fields.lionel || 0) + (rv.fields.ophelie || 0) + (rv.fields.prime_lionel || 0) + (rv.fields.prime_ophelie || 0) : null;
-  const chg = sum(chargesMontants.filter((r) => r.fields?.annee === y && r.fields?.mois === m), (r) => (r.fields.lionel || 0) + (r.fields.ophelie || 0));
-  const ep = sum(epargneMontants.filter((r) => r.fields?.annee === y && r.fields?.mois === m), (r) => r.fields.montant || 0);
-  return { revenus: rev, charges: chg, epargne: ep, has: rv != null || chg > 0 || ep > 0 };
 }
 
 // ─── Onglet Patrimoine ──────────────────────────────────────────────────────
@@ -674,7 +686,7 @@ function PlafondsSection({ data }) {
   );
 }
 
-export function BudgetReelTab({ finary, revenus, chargesMontants, epargneMontants }) {
+export function BudgetReelTab({ finary }) {
   const d = finary.data;
   const [sel, setSel] = useState(null);
   const v = useMemo(() => {
@@ -686,14 +698,13 @@ export function BudgetReelTab({ finary, revenus, chargesMontants, epargneMontant
     const history = bm.map((b) => ({ label: monthShort(b.cle), revenus: b.revenus, depenses: b.depenses, solde: b.solde }));
     const split = catMonths.map((m) => {
       const s = monthStats(m, bm, cats);
-      return { label: monthShort(m), vie: Math.round(s.vie), placements: Math.round(s.placements), revenus: Math.round(s.revenusActivite) };
+      return { label: monthShort(m), vie: Math.round(s.vie), placements: Math.round(s.placements), epargne: Math.round(s.epargne), revenus: Math.round(s.revenusActivite) };
     });
     return { bm, cats, catMonths, def, history, split };
   }, [d]);
 
   const month = sel || v?.def;
   const s = v && month ? monthStats(month, v.bm, v.cats) : null;
-  const prevu = month ? prevuPour(month, revenus, chargesMontants, epargneMontants) : null;
   const rec = synthese(d, "charges_recurrentes_mensuelles").valeur;
   const recN = synthese(d, "charges_recurrentes_nombre").valeur;
   const enCours = s?.b?.en_cours;
@@ -715,52 +726,22 @@ export function BudgetReelTab({ finary, revenus, chargesMontants, epargneMontant
           </div>
 
           <div className="grid-kpi">
-            <Kpi i={0} label="Revenus d'activité" value={eur(s.revenusActivite)} sub={`Catégorie Revenus de Finary. Total des entrées : ${eur(s.b.revenus)}, virements et remboursements compris`} color={C.blue} />
-            <Kpi i={1} label="Dépenses de vie" value={eur(s.vie)} sub="Toutes les sorties, sans les virements entre vos comptes ni les versements en placements" color={C.red} />
-            <Kpi i={2} label="Versé en placements" value={eur(s.placements)} sub="Sorties classées Investissements par Finary" color={C.violet} />
-            <Kpi i={3} label="Solde Finary" value={eur(s.b.solde)} sub={s.b.taux_epargne != null ? `Taux d'épargne Finary : ${num(s.b.taux_epargne, 1)} %` : undefined} color={(s.b.solde || 0) >= 0 ? C.green : C.red} />
+            <Kpi i={0} label="Revenus d'activité" value={eur(s.revenusActivite)} sub="Catégorie Revenus de Finary : salaires, allocations, primes" color={C.blue} />
+            <Kpi i={1} label="Dépenses de vie" value={eur(s.vie)} sub={`Toutes les sorties hors virements et placements (${eur(s.vieBrut)}), moins ${eur(s.remboursements)} de remboursements`} color={C.red} />
+            <Kpi i={2} label="Placements nets" value={eur(s.placements)} sub={`Versé ${eur(s.placementsVerses)}, retiré ${eur(s.placementsRetires)}`} color={C.violet} />
+            <Kpi i={3} label="Épargne du mois" value={eur(s.epargne)} sub={`${s.tauxEpargne != null ? `${num(s.tauxEpargne, 1)} % des revenus d'activité. ` : ""}Revenus d'activité moins dépenses de vie`} color={s.epargne >= 0 ? C.green : C.red} />
+          </div>
+          <div style={{ ...CS, padding: "14px 20px", fontSize: 13, color: C.muted, lineHeight: 1.7 }}>
+            <strong style={{ color: C.ink }}>Bilan, {monthLong(month)} :</strong>{" "}
+            {eur(s.revenusActivite)} de revenus d&apos;activité
+            {Math.abs(s.autresEntrees) >= 1 && <> {s.autresEntrees >= 0 ? "+" : "−"} {eur(Math.abs(s.autresEntrees))} d&apos;autres entrées</>}
+            {" "}− {eur(s.vie)} de dépenses de vie
+            {" "}{s.placements >= 0 ? "−" : "+"} {eur(Math.abs(s.placements))} de placements nets
+            {" "}{s.virementsNets >= 0 ? "+" : "−"} {eur(Math.abs(s.virementsNets))} de virements nets
+            {" "}= <strong style={{ color: C.ink }}>{eur(s.b.solde)}</strong> restés sur les comptes (le « solde » de Finary{s.b.taux_epargne != null ? `, qui affiche un taux d'épargne de ${num(s.b.taux_epargne, 1)} % car il compte les placements comme des dépenses` : ""}).
           </div>
           {enCours && <Note warn>{monthLong(month)} n'est pas terminé. Les chiffres couvrent le mois jusqu'à la dernière mise à jour.</Note>}
-
-          {prevu?.has && (
-          <div className="fade-up" style={CS}>
-            <h3 style={{ ...H3, fontSize: 18 }}>Réel contre prévu, {monthLong(month)}</h3>
-            {(
-              <>
-                <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 18 }}>
-                  {[
-                    ["Revenus", prevu.revenus, s.revenusActivite, "higher"],
-                    ["Charges prévues / dépenses de vie", prevu.charges, s.vie, "lower"],
-                    ["Épargne prévue / versé en placements", prevu.epargne, s.placements, "higher"],
-                  ].map(([label, p, r, good]) => {
-                    const ecart = p == null ? null : r - p;
-                    const bad = ecart == null ? false : good === "lower" ? ecart > 0 : ecart < 0;
-                    const max = Math.max(p || 0, r || 0, 1);
-                    return (
-                      <div key={label}>
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 13, flexWrap: "wrap" }}>
-                          <span style={{ fontWeight: 600 }}>{label}</span>
-                          <span style={{ color: ecart == null ? C.muted : bad ? C.red : C.green, fontWeight: 700 }}>
-                            {ecart == null ? "Pas de prévu" : `${ecart > 0 ? "+" : ""}${eur(ecart)}`}
-                          </span>
-                        </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 90px", gap: 8, alignItems: "center", marginTop: 6, fontSize: 11, color: C.muted }}>
-                          <span>Prévu</span>
-                          <div style={{ height: 8, background: C.soft, borderRadius: 4 }}><div style={{ width: `${((p || 0) / max) * 100}%`, height: "100%", background: "#c4c0b8", borderRadius: 4 }} /></div>
-                          <span style={{ textAlign: "right" }}>{eur(p)}</span>
-                          <span>Réel</span>
-                          <div style={{ height: 8, background: C.soft, borderRadius: 4 }}><div style={{ width: `${((r || 0) / max) * 100}%`, height: "100%", background: C.ink, borderRadius: 4 }} /></div>
-                          <span style={{ textAlign: "right", color: C.ink, fontWeight: 600 }}>{eur(r)}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <Note>Le prévu vient du budget saisi dans Airtable (tables Revenus, Charges et Épargne). Le réel vient de Finary. Les catégories ne correspondent pas une à une : la comparaison porte sur les totaux du mois.</Note>
-              </>
-            )}
-          </div>
-          )}
+          <Note>Un mois seul trompe : une prime ou un salaire versé plus tôt ou plus tard fait varier l&apos;épargne d&apos;un mois à l&apos;autre. Compare plutôt plusieurs mois dans le graphique ci-dessous.</Note>
 
           <div className="grid-2col">
             <div className="fade-up" style={CS}>
@@ -780,7 +761,7 @@ export function BudgetReelTab({ finary, revenus, chargesMontants, epargneMontant
               <Note>Totaux bruts de Finary : les virements entre vos comptes et les versements en placements comptent comme des sorties. Les montants très bas avant juin 2026 laissent penser que tous les comptes n'étaient pas encore connectés.</Note>
             </div>
             <div className="fade-up" style={CS}>
-              <h3 style={{ ...H3, fontSize: 18, marginBottom: 16 }}>Dépenses de vie et placements</h3>
+              <h3 style={{ ...H3, fontSize: 18, marginBottom: 16 }}>Revenus, dépenses de vie et épargne</h3>
               <ResponsiveContainer width="100%" height={260}>
                 <ComposedChart data={v.split} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.soft} />
@@ -788,12 +769,12 @@ export function BudgetReelTab({ finary, revenus, chargesMontants, epargneMontant
                   <YAxis tick={{ fontSize: 11, fill: C.muted }} tickFormatter={(x) => `${Math.round(x / 1000)} k`} width={44} />
                   <Tooltip formatter={tooltipEur} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="vie" name="Dépenses de vie" stackId="s" fill={C.red} />
-                  <Bar dataKey="placements" name="Placements" stackId="s" fill={C.violet} radius={[4, 4, 0, 0]} />
-                  <Line type="linear" dataKey="revenus" name="Revenus d'activité" stroke={C.blue} strokeWidth={2} dot={{ r: 3 }} />
+                  <Bar dataKey="revenus" name="Revenus d'activité" fill={C.blue} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="vie" name="Dépenses de vie" fill={C.red} radius={[4, 4, 0, 0]} />
+                  <Line type="linear" dataKey="epargne" name="Épargne du mois" stroke={C.green} strokeWidth={2} dot={{ r: 3 }} />
                 </ComposedChart>
               </ResponsiveContainer>
-              <Note>Calcul à partir des catégories Finary : sorties totales moins Virements et Investissements.</Note>
+              <Note>Dépenses de vie : sorties totales moins virements et placements, moins les remboursements. Épargne du mois : revenus d&apos;activité moins dépenses de vie.</Note>
             </div>
           </div>
 
@@ -1040,15 +1021,28 @@ export function finaryContext(d) {
     const bm = [...(d.budgetMois || [])].sort((a, b) => a.cle.localeCompare(b.cle));
     const cats = d.budgetCategories || [];
     const months = [...new Set(cats.map((c) => c.mois))].sort();
-    s += `Budget réel Finary par mois (revenus d'activité / dépenses de vie hors virements et placements / versé en placements / solde Finary) :\n`;
+    const enCours = (m) => !!bm.find((b) => b.cle === m)?.en_cours;
+    s += `\nBUDGET RÉEL PAR MOIS (calculé à partir des catégories Finary).\n`;
+    s += `Définitions : revenus d'activité = catégorie Revenus (salaires, allocations, primes). Dépenses de vie = toutes les sorties sauf virements et placements, moins les remboursements (crédit immobilier et impôts compris). Placements nets = versé moins retiré. Épargne du mois = revenus d'activité moins dépenses de vie.\n`;
     months.forEach((m) => {
       const st = monthStats(m, bm, cats);
-      s += `- ${monthLong(m)}${st.b.en_cours ? " (en cours)" : ""} : ${eur(st.revenusActivite)} / ${eur(st.vie)} / ${eur(st.placements)} / ${eur(st.b.solde)}\n`;
+      s += `- ${monthLong(m)}${st.b.en_cours ? " (mois en cours, partiel)" : ""} : revenus d'activité ${eur(st.revenusActivite)}, autres entrées ${eur(st.autresEntrees)}, dépenses de vie ${eur(st.vie)}, épargne du mois ${eur(st.epargne)}${st.tauxEpargne != null ? ` (${num(st.tauxEpargne, 1)} %)` : ""}, placements nets ${eur(st.placements)}, virements nets ${eur(st.virementsNets)}, reste sur les comptes ${eur(st.b.solde)}.\n`;
     });
-    const lastFull = [...months].reverse().find((m) => !bm.find((b) => b.cle === m)?.en_cours);
-    if (lastFull) {
-      s += `Dépenses par catégorie en ${monthLong(lastFull)} : ${cats.filter((c) => c.mois === lastFull && c.depenses > 0).sort((a, b) => b.depenses - a.depenses).map((c) => `${c.libelle} ${eur(c.depenses)}`).join(", ")}.\n`;
+    const complets = months.filter((m) => !enCours(m)).slice(-3);
+    if (complets.length) {
+      const stats = complets.map((m) => monthStats(m, bm, cats));
+      const moy = (k) => stats.reduce((a, x) => a + (x[k] || 0), 0) / stats.length;
+      s += `Moyenne des ${stats.length} derniers mois complets (${complets.map(monthLong).join(", ")}) : revenus d'activité ${eur(moy("revenusActivite"))}, dépenses de vie ${eur(moy("vie"))}, épargne ${eur(moy("epargne"))} par mois, placements nets ${eur(moy("placements"))} par mois. C'est la meilleure base pour parler de l'enveloppe mensuelle du foyer.\n`;
     }
+    const autres = bm.filter((b) => !months.includes(b.cle));
+    if (autres.length) {
+      s += `Mois sans détail par catégorie (totaux bruts Finary, virements et placements compris) : ${autres.map((b) => `${monthLong(b.cle)} entrées ${eur(b.revenus)}, sorties ${eur(b.depenses)}`).join(" ; ")}.\n`;
+    }
+    const lastFull = [...months].reverse().find((m) => !enCours(m));
+    const current = [...months].reverse().find((m) => enCours(m));
+    [lastFull, current].filter(Boolean).forEach((m) => {
+      s += `Dépenses par catégorie en ${monthLong(m)}${enCours(m) ? " (partiel)" : ""}, avec la moyenne mensuelle des 12 mois précédents : ${cats.filter((c) => c.mois === m && c.depenses > 0).sort((a, b) => b.depenses - a.depenses).map((c) => `${c.libelle} ${eur(c.depenses)}${c.moyenne_12m != null ? ` (moyenne ${eur(c.moyenne_12m)})` : ""}`).join(", ")}.\n`;
+    });
     const rec = synthese(d, "charges_recurrentes_mensuelles").valeur;
     if (rec != null) s += `Charges récurrentes détectées par Finary : ${eur(rec)} par mois (hors charges annuelles).\n`;
     const w = weekView(d.semaine || []);
@@ -1062,7 +1056,7 @@ export function finaryContext(d) {
     if (groups) {
       s += `Commerçants suivis la même semaine (semaine / moyenne hebdo 12 semaines) : ${groups.flatMap((g) => g.rows).map((r) => `${r.marchand} ${eur(r.depenses)} / ${eur(r.moyenne_12s)}`).join(", ")}.\n`;
     }
-    s += `Attention : dans Finary, les virements entre comptes et les versements en placements comptent comme des dépenses. Les mois avant juin 2026 semblent incomplets.\n`;
+    s += `Limites : Finary ne donne ni le libellé des opérations ni les sous-catégories. Les mois avant juin 2026 semblent incomplets, donc les moyennes sur 12 mois sont un peu basses. Le taux d'épargne affiché par Finary compte les placements comme des dépenses : ne le cite pas comme le taux d'épargne réel.\n`;
     return s;
   } catch {
     return "";

@@ -159,36 +159,32 @@ function AddEpModal({onClose,onAdd}){const[type,setType]=useState("");const[bene
     <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}><button className="btn-press" onClick={onClose} style={{padding:"10px 20px",background:"transparent",color:"#8a8578",border:"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600}}>Annuler</button><button className="btn-press" disabled={!type} onClick={()=>onAdd({type,beneficiaire:benef,objectif:obj})} style={{padding:"10px 22px",background:"#1a1a2e",color:"#faf9f7",border:"none",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600,opacity:type?1:.5}}>Ajouter</button></div>
   </div></Modal>);}
 
-function AIAssistant({revenus,charges,chargesMontants,epargne,epargneMontants,objectifs,annee,finaryData}){
-  const[msgs,setMsgs]=useState([{role:"assistant",content:"Bonjour ! Je suis votre assistant budgétaire. Posez-moi des questions sur vos finances : analyse des dépenses, conseils d'économies, projections..."}]);
+// L'assistant ne s'appuie que sur les données réelles Finary. Le budget prévisionnel saisi dans Airtable
+// en mars 2026 n'est plus modifiable sur le site : il n'est plus envoyé, pour éviter des réponses périmées.
+function AIAssistant({finaryData}){
+  const[msgs,setMsgs]=useState([{role:"assistant",content:"Bonjour ! Je réponds à partir de vos données Finary, mises à jour chaque dimanche : patrimoine, budget réel par mois, dépenses de la semaine, objectifs et prêt."}]);
   const[input,setInput]=useState("");
   const[loading,setLoading]=useState(false);
   const endRef=useRef(null);
   useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[msgs]);
-  const buildContext=()=>{
-    const revByYear=revenus.filter(r=>r.fields?.annee===annee);
-    const cmByYear=chargesMontants.filter(r=>r.fields?.annee===annee);
-    const emByYear=epargneMontants.filter(r=>r.fields?.annee===annee);
-    let ctx=`DONNÉES BUDGET FAMILIAL ${annee} (Lionel & Ophélie Tchamfong)\n\n`;
-    ctx+=`REVENUS PAR MOIS:\n`;
-    for(let m=1;m<=12;m++){const r=revByYear.find(r=>r.fields?.mois===m);ctx+=`${MOIS_FULL[m-1]}: Lionel=${r?.fields?.lionel||0}€, Ophélie=${r?.fields?.ophelie||0}€\n`;}
-    ctx+=`\nCHARGES PAR CATÉGORIE ET MOIS:\n`;
-    charges.forEach(c=>{const montants=cmByYear.filter(cm=>{const l=cm.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===c.id;});const total=montants.reduce((s,m)=>s+(m.fields?.lionel||0)+(m.fields?.ophelie||0),0);if(total>0)ctx+=`${c.fields?.categorie} > ${c.fields?.description} (${c.fields?.compte}): Total annuel=${total}€\n`;});
-    ctx+=`\nÉPARGNE:\n`;
-    epargne.forEach(ep=>{const montants=emByYear.filter(em=>{const l=em.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===ep.id;});const total=montants.reduce((s,m)=>s+(m.fields?.montant||0),0);ctx+=`${ep.fields?.type} (${ep.fields?.beneficiaire}): Total=${total}€\n`;});
-    ctx+=`\nOBJECTIFS:\n`;
-    objectifs.forEach(o=>ctx+=`${o.fields?.type}: Objectif=${o.fields?.objectif_annuel||0}€\n`);
-    ctx+=finaryContext(finaryData);
-    return ctx;
+  const buildSystem=()=>{
+    const today=new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+    const ctx=finaryContext(finaryData);
+    return `Tu es l'assistant budgétaire de la famille Tchamfong (Lionel, Ophélie et leurs trois filles). Nous sommes le ${today}.
+Règles :
+- Appuie-toi uniquement sur les données réelles Finary ci-dessous. Il n'existe pas d'autre budget de référence.
+- Si une donnée manque, dis-le clairement. N'invente aucun chiffre et ne fais pas passer une estimation pour une donnée.
+- Distingue les mois complets du mois en cours, qui est partiel. Pour une enveloppe ou un budget mensuel, pars de la moyenne des derniers mois complets, pas d'un seul mois.
+- Réponds en français, en texte simple : phrases courtes, listes avec des tirets si besoin, pas de tableau, pas de titre, pas de gras.
+${ctx||"\nAucune donnée Finary n'a pu être chargée. Dis-le et propose de recharger la page."}`;
   };
   const send=async()=>{
     if(!input.trim()||loading)return;
     const userMsg={role:"user",content:input};
     setMsgs(p=>[...p,userMsg]);setInput("");setLoading(true);
     try{
-      const ctx=buildContext();
       const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-        system:`Tu es un assistant budgétaire expert pour une famille française. Tu analyses leurs données financières et donnes des conseils précis, chiffrés et actionables. Réponds toujours en français, de manière concise et bienveillante. Voici les données:\n\n${ctx}`,
+        system:buildSystem(),
         messages:[...msgs.filter(m=>m.role!=="assistant"||msgs.indexOf(m)>0).slice(-6),userMsg]
       })});
       const data=await res.json();
@@ -197,7 +193,7 @@ function AIAssistant({revenus,charges,chargesMontants,epargne,epargneMontants,ob
     }catch(e){setMsgs(p=>[...p,{role:"assistant",content:"Erreur de connexion. Réessayez."}]);}
     setLoading(false);
   };
-  const suggestions=["Où dépensons-nous le plus ?","Combien économiser si on réduit les abonnements ?","Quel est notre taux d'épargne ?","Sommes-nous sur la bonne trajectoire pour nos objectifs ?"];
+  const suggestions=["Quelle est notre enveloppe mensuelle ?","Où dépensons-nous le plus ce mois-ci ?","Quel est notre taux d'épargne réel ?","Où en sont nos objectifs Finary ?"];
   return(<div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 180px)",maxHeight:700}}>
     <div style={{flex:1,overflowY:"auto",padding:"20px 0",display:"flex",flexDirection:"column",gap:16}}>
       {msgs.map((m,i)=><div key={i} className="fade-up" style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
@@ -563,10 +559,10 @@ export default function BudgetApp(){
     <div style={{background:"#fff",borderBottom:"1px solid #e8e4dd",position:"sticky",top:68,zIndex:99}}><div className="nav-wrap">{tabs.map(([k,l])=><button key={k} className="btn-press" onClick={()=>setTab(k)} style={{padding:"8px 14px",border:"none",borderRadius:9,cursor:"pointer",fontSize:13,fontWeight:600,background:tab===k?"#1a1a2e":"transparent",color:tab===k?"#faf9f7":"#8a8578",whiteSpace:"nowrap",position:"relative"}}>{l}</button>)}</div></div>
     <div className="content-wrap">
     {tab==="patrimoine"&&<PatrimoineTab finary={finary}/>}
-    {tab==="budget_reel"&&<BudgetReelTab finary={finary} revenus={revenus} chargesMontants={chargesMontants} epargneMontants={epargneMontants}/>}
+    {tab==="budget_reel"&&<BudgetReelTab finary={finary}/>}
     {tab==="placements"&&<ComptesTab finary={finary}/>}
     {tab==="impots"&&<div className="fade-up"><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:20}}>Simulateur Impôt sur le Revenu</h3><TaxSimulator/></div>}
-    {tab==="assistant"&&<div className="fade-up" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:16}}>Assistant budgétaire IA</h3><AIAssistant revenus={revenus} charges={charges} chargesMontants={chargesMontants} epargne={epargne} epargneMontants={epargneMontants} objectifs={objectifs} annee={annee} finaryData={finary.data}/></div>}
+    {tab==="assistant"&&<div className="fade-up" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:16}}>Assistant budgétaire IA</h3><AIAssistant finaryData={finary.data}/></div>}
     
     {tab==="immobilier"&&<div className="fade-up">
       <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:28,paddingBottom:20,borderBottom:"1px solid #e8e4dd"}}>
