@@ -15,6 +15,8 @@ const TABLES = {
   positions: "Finary_Positions",
   pret: "Finary_Pret",
   synthese: "Finary_Synthese",
+  semaine: "Finary_Semaine",
+  marchands: "Finary_Marchands",
 };
 
 const CACHE_MS = 10 * 60 * 1000;

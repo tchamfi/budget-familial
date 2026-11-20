@@ -3,15 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { useFinary, PatrimoineTab, BudgetReelTab, ComptesTab, finaryContext } from "./FinaryTabs";
 
-// Le jeton Airtable reste côté serveur : le navigateur passe par /api/airtable, protégé par la session.
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-const API = "/api/airtable";
-const HEADERS = { "Content-Type": "application/json" };
-async function apiFetch(url,init={}){const r=await fetch(url,{...init,headers:HEADERS,credentials:"same-origin"});if(r.status===401&&typeof window!=="undefined")window.dispatchEvent(new Event("bf-unauth"));return r;}
-const MOIS = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
-const MOIS_FULL = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
-const CAT_COLORS = {"LOGEMENT":"#1e40af","MAISON":"#6d28d9","VOITURE & TRANSPORT":"#c2410c","ABONNEMENTS":"#0e7490","SPORT & SANTÉ":"#15803d","ENFANTS":"#be185d","DEPENSES EXEPTIONNELLES":"#b91c1c","LOISIRS":"#a16207","ALIMENTAIRE":"#4d7c0f"};
-const CHART_COLORS = ["#1e40af","#6d28d9","#c2410c","#0e7490","#15803d","#be185d","#b91c1c","#a16207","#4d7c0f"];
 const fmt = (n) => new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(n||0);
 
 // === BARÈME IR 2026 (revenus 2025) ===
@@ -48,13 +40,6 @@ function calculerIR(revenuImposable, nbParts, isCouple=true) {
   }
   return Math.round(impotBrut);
 }
-
-async function fetchAll(table){let all=[],offset=null;do{const url=`${API}/${encodeURIComponent(table)}?pageSize=100${offset?`&offset=${offset}`:""}`;const res=await apiFetch(url);const data=await res.json();all=all.concat(data.records||[]);offset=data.offset;}while(offset);return all;}
-async function fetchRecords(table,params=""){const r=await apiFetch(`${API}/${encodeURIComponent(table)}?${params}`);const d=await r.json();return d.records||[];}
-async function updateRecord(table,id,fields){return(await apiFetch(`${API}/${encodeURIComponent(table)}/${id}`,{method:"PATCH",body:JSON.stringify({fields})})).json();}
-async function createRecord(table,fields){return(await apiFetch(`${API}/${encodeURIComponent(table)}`,{method:"POST",body:JSON.stringify({records:[{fields}]})})).json();}
-async function deleteRecord(table,id){await apiFetch(`${API}/${encodeURIComponent(table)}/${id}`,{method:"DELETE"});}
-async function batchDelete(table,ids){for(let i=0;i<ids.length;i+=10){const batch=ids.slice(i,i+10);const params=batch.map(id=>`records[]=${id}`).join("&");await apiFetch(`${API}/${encodeURIComponent(table)}?${params}`,{method:"DELETE"});}}
 
 function GlobalStyles(){return(<style dangerouslySetInnerHTML={{__html:`
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Serif+Display&display=swap');
@@ -130,65 +115,32 @@ function LoginPage({onLogin}){
     </div>
   </div></>);}
 
-function Modal({children,onClose}){return(<div onClick={onClose} className="fade-in" style={{position:"fixed",inset:0,background:"rgba(26,26,46,0.35)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}}><div onClick={e=>e.stopPropagation()} className="scale-in" style={{background:"#fff",borderRadius:20,padding:"32px 28px",maxWidth:480,width:"90%",maxHeight:"80vh",overflowY:"auto",boxShadow:"0 24px 80px rgba(26,26,46,0.15)",border:"1px solid rgba(26,26,46,0.06)"}}>{children}</div></div>);}
-
-function ConfirmModal({title,message,onConfirm,onCancel,confirmLabel="Confirmer",danger=true}){return(<Modal onClose={onCancel}><h3 style={{fontSize:18,fontWeight:700,marginBottom:8}}>{title}</h3><p style={{color:"#8a8578",fontSize:14,marginBottom:24,lineHeight:1.6}}>{message}</p><div style={{display:"flex",gap:10,justifyContent:"flex-end"}}><button className="btn-press" onClick={onCancel} style={{padding:"10px 20px",background:"transparent",color:"#8a8578",border:"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600}}>Annuler</button><button className="btn-press" onClick={onConfirm} style={{padding:"10px 20px",background:danger?"#b91c1c":"#1a1a2e",color:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600}}>{confirmLabel}</button></div></Modal>);}
-
-function DeleteChargeModal({charge,onClose,onDelete}){const[mode,setMode]=useState("all");const[sel,setSel]=useState([]);const toggle=i=>setSel(p=>p.includes(i)?p.filter(m=>m!==i):[...p,i]);const rs=(a)=>({display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer",padding:"14px 16px",border:a?"2px solid #1a1a2e":"1px solid #e8e4dd",borderRadius:12,background:a?"rgba(26,26,46,0.02)":"#fff",transition:"all .2s"});
-  return(<Modal onClose={onClose}><h3 style={{fontSize:18,fontWeight:700,color:"#b91c1c",marginBottom:6}}>Supprimer une charge</h3><p style={{color:"#8a8578",fontSize:14,marginBottom:20}}>Charge : <strong style={{color:"#1a1a2e"}}>{charge.fields?.description}</strong></p><div style={{display:"flex",flexDirection:"column",gap:10}}><label style={rs(mode==="all")}><input type="radio" checked={mode==="all"} onChange={()=>setMode("all")} style={{marginTop:2}}/><div><div style={{fontSize:14,fontWeight:600}}>Supprimer complètement</div><div style={{fontSize:12,color:"#8a8578",marginTop:2}}>Charge + tous les montants</div></div></label><label style={rs(mode==="months")}><input type="radio" checked={mode==="months"} onChange={()=>setMode("months")} style={{marginTop:2}}/><div><div style={{fontSize:14,fontWeight:600}}>Remettre à 0 pour certains mois</div></div></label>{mode==="months"&&<div style={{display:"flex",gap:6,flexWrap:"wrap",paddingLeft:8}}>{MOIS.map((m,i)=><button key={i} className="btn-press" onClick={()=>toggle(i)} style={{padding:"6px 14px",border:sel.includes(i)?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:sel.includes(i)?700:400,background:sel.includes(i)?"rgba(26,26,46,0.05)":"#fff",color:sel.includes(i)?"#1a1a2e":"#8a8578"}}>{m}</button>)}<button className="btn-press" onClick={()=>setSel(Array.from({length:12},(_,i)=>i))} style={{padding:"6px 14px",border:"1px solid #ddd8d0",borderRadius:8,cursor:"pointer",fontSize:11,fontWeight:600,background:"transparent",color:"#8a8578"}}>Tous</button></div>}</div><div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:24}}><button className="btn-press" onClick={onClose} style={{padding:"10px 20px",background:"transparent",color:"#8a8578",border:"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600}}>Annuler</button><button className="btn-press" disabled={mode==="months"&&sel.length===0} onClick={()=>onDelete(mode,sel)} style={{padding:"10px 20px",background:"#b91c1c",color:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600,opacity:mode==="months"&&sel.length===0?.5:1}}>{mode==="all"?"Supprimer":"Remettre à 0"}</button></div></Modal>);}
-
-function InitYearModal({targetYear,prevYear,onClose,onInit}){const[mode,setMode]=useState("duplicate");const os=(a)=>({display:"flex",alignItems:"flex-start",gap:12,cursor:"pointer",padding:"18px 20px",border:a?"2px solid #1a1a2e":"1px solid #e8e4dd",borderRadius:14,background:a?"rgba(26,26,46,0.02)":"#fff",transition:"all .2s"});
-  return(<Modal onClose={onClose}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:22,marginBottom:6}}>Nouvelle année {targetYear}</h3><p style={{color:"#8a8578",fontSize:14,marginBottom:20,lineHeight:1.6}}>Comment initialiser {targetYear} ?</p><div style={{display:"flex",flexDirection:"column",gap:10}}><label style={os(mode==="duplicate")}><input type="radio" checked={mode==="duplicate"} onChange={()=>setMode("duplicate")} style={{marginTop:3}}/><div><div style={{fontSize:15,fontWeight:600}}>Dupliquer {prevYear}</div><div style={{fontSize:12,color:"#8a8578",marginTop:3}}>Reprend les montants</div></div></label><label style={os(mode==="zero")}><input type="radio" checked={mode==="zero"} onChange={()=>setMode("zero")} style={{marginTop:3}}/><div><div style={{fontSize:15,fontWeight:600}}>Repartir de zéro</div><div style={{fontSize:12,color:"#8a8578",marginTop:3}}>Tous les montants à 0</div></div></label></div><div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:24}}><button className="btn-press" onClick={onClose} style={{padding:"10px 20px",background:"transparent",color:"#8a8578",border:"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600}}>Annuler</button><button className="btn-press" onClick={()=>onInit(mode)} style={{padding:"10px 22px",background:"#1a1a2e",color:"#faf9f7",border:"none",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600}}>Initialiser {targetYear}</button></div></Modal>);}
-
-function AddChgModal({cats,onClose,onAdd}){const[desc,setDesc]=useState("");const[cat,setCat]=useState(cats[0]||"");const[newCat,setNewCat]=useState("");const[useNew,setUseNew]=useState(false);const[compte,setCompte]=useState("Commun");const[l,setL]=useState(0);const[o,setO]=useState(0);const[sel,setSel]=useState(Array.from({length:12},(_,i)=>i));const toggle=i=>setSel(p=>p.includes(i)?p.filter(m=>m!==i):[...p,i]);
-  const ls={fontSize:11,fontWeight:600,color:"#8a8578",marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.05em"};const is={padding:"10px 14px",border:"1px solid #ddd8d0",borderRadius:10,fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",background:"#faf9f7",fontFamily:"'DM Sans',sans-serif"};
-  return(<Modal onClose={onClose}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:22,marginBottom:20}}>Nouvelle charge</h3><div style={{display:"flex",flexDirection:"column",gap:16}}>
-    <div><label style={ls}>Description</label><input style={is} value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Ex: Netflix"/></div>
-    <div><label style={ls}>Catégorie</label><div style={{display:"flex",gap:8}}>{!useNew?<select style={{...is,flex:1,cursor:"pointer"}} value={cat} onChange={e=>setCat(e.target.value)}>{cats.map(c=><option key={c}>{c}</option>)}</select>:<input style={{...is,flex:1}} value={newCat} onChange={e=>setNewCat(e.target.value)} placeholder="Nouvelle catégorie"/>}<button className="btn-press" onClick={()=>setUseNew(!useNew)} style={{padding:"10px 14px",background:"transparent",border:"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:12,fontWeight:600,color:"#1a1a2e",whiteSpace:"nowrap"}}>{useNew?"Existante":"+ Nouvelle"}</button></div></div>
-    <div><label style={ls}>Compte</label><div style={{display:"flex",gap:8}}>{["Commun","Perso"].map(c=><button key={c} className="btn-press" onClick={()=>setCompte(c)} style={{flex:1,padding:"10px",border:compte===c?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:compte===c?700:400,background:compte===c?"rgba(26,26,46,0.04)":"#fff",color:compte===c?"#1a1a2e":"#8a8578"}}>{c}</button>)}</div></div>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}><div><label style={ls}>Montant Lionel</label><input style={{...is,textAlign:"right"}} type="number" value={l} onChange={e=>setL(+e.target.value)}/></div><div><label style={ls}>Montant Ophélie</label><input style={{...is,textAlign:"right"}} type="number" value={o} onChange={e=>setO(+e.target.value)}/></div></div>
-    <div><label style={ls}>Mois</label><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{MOIS.map((m,i)=><button key={i} className="btn-press" onClick={()=>toggle(i)} style={{padding:"7px 13px",border:sel.includes(i)?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:sel.includes(i)?700:400,background:sel.includes(i)?"rgba(26,26,46,0.05)":"#fff",color:sel.includes(i)?"#1a1a2e":"#8a8578"}}>{m}</button>)}</div></div>
-    <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}><button className="btn-press" onClick={onClose} style={{padding:"10px 20px",background:"transparent",color:"#8a8578",border:"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600}}>Annuler</button><button className="btn-press" disabled={!desc} onClick={()=>onAdd({description:desc,categorie:useNew?newCat:cat,compte,lionel:l,ophelie:o,moisList:sel})} style={{padding:"10px 22px",background:"#1a1a2e",color:"#faf9f7",border:"none",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600,opacity:desc?1:.5}}>Ajouter</button></div>
-  </div></Modal>);}
-
-function AddEpModal({onClose,onAdd}){const[type,setType]=useState("");const[benef,setBenef]=useState("Lionel");const[obj,setObj]=useState(0);const ls={fontSize:11,fontWeight:600,color:"#8a8578",marginBottom:6,display:"block",textTransform:"uppercase",letterSpacing:"0.05em"};const is={padding:"10px 14px",border:"1px solid #ddd8d0",borderRadius:10,fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",background:"#faf9f7",fontFamily:"'DM Sans',sans-serif"};
-  return(<Modal onClose={onClose}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:22,marginBottom:20}}>Nouveau type d'épargne</h3><div style={{display:"flex",flexDirection:"column",gap:16}}>
-    <div><label style={ls}>Type</label><input style={is} value={type} onChange={e=>setType(e.target.value)} placeholder="PER, CTO, Crypto..."/></div>
-    <div><label style={ls}>Bénéficiaire</label><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{["Lionel","Ophélie","Noémie","Alizée","Commun"].map(b=><button key={b} className="btn-press" onClick={()=>setBenef(b)} style={{padding:"8px 16px",border:benef===b?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:benef===b?700:400,background:benef===b?"rgba(26,26,46,0.04)":"#fff",color:benef===b?"#1a1a2e":"#8a8578"}}>{b}</button>)}</div></div>
-    <div><label style={ls}>Objectif annuel</label><input style={{...is,textAlign:"right"}} type="number" value={obj} onChange={e=>setObj(+e.target.value)}/></div>
-    <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}><button className="btn-press" onClick={onClose} style={{padding:"10px 20px",background:"transparent",color:"#8a8578",border:"1px solid #ddd8d0",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600}}>Annuler</button><button className="btn-press" disabled={!type} onClick={()=>onAdd({type,beneficiaire:benef,objectif:obj})} style={{padding:"10px 22px",background:"#1a1a2e",color:"#faf9f7",border:"none",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:600,opacity:type?1:.5}}>Ajouter</button></div>
-  </div></Modal>);}
-
-function AIAssistant({revenus,charges,chargesMontants,epargne,epargneMontants,objectifs,annee,finaryData}){
-  const[msgs,setMsgs]=useState([{role:"assistant",content:"Bonjour ! Je suis votre assistant budgétaire. Posez-moi des questions sur vos finances : analyse des dépenses, conseils d'économies, projections..."}]);
+// L'assistant ne s'appuie que sur les données réelles Finary. Le budget prévisionnel saisi dans Airtable
+// en mars 2026 n'est plus modifiable sur le site : il n'est plus envoyé, pour éviter des réponses périmées.
+function AIAssistant({finaryData}){
+  const[msgs,setMsgs]=useState([{role:"assistant",content:"Bonjour ! Je réponds à partir de vos données Finary, mises à jour chaque dimanche : patrimoine, budget réel par mois, dépenses de la semaine, objectifs et prêt."}]);
   const[input,setInput]=useState("");
   const[loading,setLoading]=useState(false);
   const endRef=useRef(null);
   useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[msgs]);
-  const buildContext=()=>{
-    const revByYear=revenus.filter(r=>r.fields?.annee===annee);
-    const cmByYear=chargesMontants.filter(r=>r.fields?.annee===annee);
-    const emByYear=epargneMontants.filter(r=>r.fields?.annee===annee);
-    let ctx=`DONNÉES BUDGET FAMILIAL ${annee} (Lionel & Ophélie Tchamfong)\n\n`;
-    ctx+=`REVENUS PAR MOIS:\n`;
-    for(let m=1;m<=12;m++){const r=revByYear.find(r=>r.fields?.mois===m);ctx+=`${MOIS_FULL[m-1]}: Lionel=${r?.fields?.lionel||0}€, Ophélie=${r?.fields?.ophelie||0}€\n`;}
-    ctx+=`\nCHARGES PAR CATÉGORIE ET MOIS:\n`;
-    charges.forEach(c=>{const montants=cmByYear.filter(cm=>{const l=cm.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===c.id;});const total=montants.reduce((s,m)=>s+(m.fields?.lionel||0)+(m.fields?.ophelie||0),0);if(total>0)ctx+=`${c.fields?.categorie} > ${c.fields?.description} (${c.fields?.compte}): Total annuel=${total}€\n`;});
-    ctx+=`\nÉPARGNE:\n`;
-    epargne.forEach(ep=>{const montants=emByYear.filter(em=>{const l=em.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===ep.id;});const total=montants.reduce((s,m)=>s+(m.fields?.montant||0),0);ctx+=`${ep.fields?.type} (${ep.fields?.beneficiaire}): Total=${total}€\n`;});
-    ctx+=`\nOBJECTIFS:\n`;
-    objectifs.forEach(o=>ctx+=`${o.fields?.type}: Objectif=${o.fields?.objectif_annuel||0}€\n`);
-    ctx+=finaryContext(finaryData);
-    return ctx;
+  const buildSystem=()=>{
+    const today=new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+    const ctx=finaryContext(finaryData);
+    return `Tu es l'assistant budgétaire de la famille Tchamfong (Lionel, Ophélie et leurs trois filles). Nous sommes le ${today}.
+Règles :
+- Appuie-toi uniquement sur les données réelles Finary ci-dessous. Il n'existe pas d'autre budget de référence.
+- Si une donnée manque, dis-le clairement. N'invente aucun chiffre et ne fais pas passer une estimation pour une donnée.
+- Distingue les mois complets du mois en cours, qui est partiel. Pour une enveloppe ou un budget mensuel, pars de la moyenne des derniers mois complets, pas d'un seul mois.
+- Réponds en français, en texte simple : phrases courtes, listes avec des tirets si besoin, pas de tableau, pas de titre, pas de gras.
+${ctx||"\nAucune donnée Finary n'a pu être chargée. Dis-le et propose de recharger la page."}`;
   };
   const send=async()=>{
     if(!input.trim()||loading)return;
     const userMsg={role:"user",content:input};
     setMsgs(p=>[...p,userMsg]);setInput("");setLoading(true);
     try{
-      const ctx=buildContext();
       const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-        system:`Tu es un assistant budgétaire expert pour une famille française. Tu analyses leurs données financières et donnes des conseils précis, chiffrés et actionables. Réponds toujours en français, de manière concise et bienveillante. Voici les données:\n\n${ctx}`,
+        system:buildSystem(),
         messages:[...msgs.filter(m=>m.role!=="assistant"||msgs.indexOf(m)>0).slice(-6),userMsg]
       })});
       const data=await res.json();
@@ -197,7 +149,7 @@ function AIAssistant({revenus,charges,chargesMontants,epargne,epargneMontants,ob
     }catch(e){setMsgs(p=>[...p,{role:"assistant",content:"Erreur de connexion. Réessayez."}]);}
     setLoading(false);
   };
-  const suggestions=["Où dépensons-nous le plus ?","Combien économiser si on réduit les abonnements ?","Quel est notre taux d'épargne ?","Sommes-nous sur la bonne trajectoire pour nos objectifs ?"];
+  const suggestions=["Quelle est notre enveloppe mensuelle ?","Où dépensons-nous le plus ce mois-ci ?","Quel est notre taux d'épargne réel ?","Où en sont nos objectifs Finary ?"];
   return(<div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 180px)",maxHeight:700}}>
     <div style={{flex:1,overflowY:"auto",padding:"20px 0",display:"flex",flexDirection:"column",gap:16}}>
       {msgs.map((m,i)=><div key={i} className="fade-up" style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
@@ -399,162 +351,17 @@ function TaxSimulator(){
   </div>);
 }
 
-function VirementCalcul({charges,chargesMontants,revenus,annee,mois}){
-  const cmByYear=chargesMontants.filter(r=>r.fields?.annee===annee);
-  const results=MOIS_FULL.map((moisNom,m)=>{
-    let totCommun=0,totPersoL=0,totPersoO=0;
-    charges.forEach(c=>{
-      const cm=cmByYear.find(r=>{const l=r.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===c.id&&r.fields?.mois===m+1;});
-      if(!cm)return;
-      const l=cm.fields?.lionel||0,o=cm.fields?.ophelie||0;
-      if(c.fields?.compte==="Perso"){totPersoL+=l;totPersoO+=o;}
-      else{totCommun+=l+o;}
-    });
-    const totalChargesL=charges.reduce((s,c)=>{const cm=cmByYear.find(r=>{const l=r.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===c.id&&r.fields?.mois===m+1;});return s+(cm?.fields?.lionel||0);},0);
-    const totalChargesO=charges.reduce((s,c)=>{const cm=cmByYear.find(r=>{const l=r.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===c.id&&r.fields?.mois===m+1;});return s+(cm?.fields?.ophelie||0);},0);
-    const virementL=totalChargesL-totPersoL;
-    const virementO=totalChargesO-totPersoO;
-    return{mois:moisNom,totCommun,totPersoL,totPersoO,virementL,virementO,totalL:totalChargesL,totalO:totalChargesO};
-  });
-  const current=results[mois];
-  const thS={textAlign:"left",padding:"10px 12px",borderBottom:"2px solid #e8e4dd",color:"#8a8578",fontWeight:600,fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em"};
-  const tdS={padding:"10px 12px",borderBottom:"1px solid #f2efeb",fontSize:13};
-  return(<div style={{display:"flex",flexDirection:"column",gap:20}}>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-      <div className="card-hover" style={{background:"#fff",borderRadius:16,padding:24,border:"1px solid rgba(26,26,46,0.06)",borderTop:"3px solid #1e40af"}}>
-        <div style={{fontSize:11,fontWeight:600,color:"#8a8578",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Virement Lionel</div>
-        <div style={{fontFamily:"'DM Serif Display',serif",fontSize:32,color:"#1e40af"}}>{fmt(current?.virementL||0)}</div>
-        <div style={{fontSize:12,color:"#8a8578",marginTop:6}}>vers le compte commun — {MOIS_FULL[mois]}</div>
-      </div>
-      <div className="card-hover" style={{background:"#fff",borderRadius:16,padding:24,border:"1px solid rgba(26,26,46,0.06)",borderTop:"3px solid #be185d"}}>
-        <div style={{fontSize:11,fontWeight:600,color:"#8a8578",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:8}}>Virement Ophélie</div>
-        <div style={{fontFamily:"'DM Serif Display',serif",fontSize:32,color:"#be185d"}}>{fmt(current?.virementO||0)}</div>
-        <div style={{fontSize:12,color:"#8a8578",marginTop:6}}>vers le compte commun — {MOIS_FULL[mois]}</div>
-      </div>
-    </div>
-    <div style={{background:"#fff",borderRadius:16,padding:24,border:"1px solid rgba(26,26,46,0.06)"}}>
-      <h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:18,marginBottom:16}}>Récapitulatif mensuel {annee}</h3>
-      <table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th style={thS}>Mois</th><th style={{...thS,textAlign:"right"}}>Charges Lionel</th><th style={{...thS,textAlign:"right"}}>Perso Lionel</th><th style={{...thS,textAlign:"right"}}>Virement Lionel</th><th style={{...thS,textAlign:"right"}}>Charges Ophélie</th><th style={{...thS,textAlign:"right"}}>Perso Ophélie</th><th style={{...thS,textAlign:"right"}}>Virement Ophélie</th></tr></thead><tbody>
-        {results.map((r,i)=><tr key={i} className="row-hover" style={{background:i===mois?"rgba(26,26,46,0.03)":"transparent",fontWeight:i===mois?600:400}}>
-          <td style={tdS}>{r.mois}</td>
-          <td style={{...tdS,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{fmt(r.totalL)}</td>
-          <td style={{...tdS,textAlign:"right",fontVariantNumeric:"tabular-nums",color:"#8a8578"}}>{fmt(r.totPersoL)}</td>
-          <td style={{...tdS,textAlign:"right",fontVariantNumeric:"tabular-nums",color:"#1e40af",fontWeight:600}}>{fmt(r.virementL)}</td>
-          <td style={{...tdS,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{fmt(r.totalO)}</td>
-          <td style={{...tdS,textAlign:"right",fontVariantNumeric:"tabular-nums",color:"#8a8578"}}>{fmt(r.totPersoO)}</td>
-          <td style={{...tdS,textAlign:"right",fontVariantNumeric:"tabular-nums",color:"#be185d",fontWeight:600}}>{fmt(r.virementO)}</td>
-        </tr>)}
-      </tbody></table>
-    </div>
-  </div>);
-}
-
-function Alerts({revenus,chargesMontants,epargneMontants,annee,mois}){
-  const[dismissed,setDismissed]=useState(()=>{try{return JSON.parse(localStorage.getItem("budget_dismissed_alerts")||"[]");}catch{return[];}});
-  const dismiss=(key)=>{const next=[...dismissed,key];setDismissed(next);localStorage.setItem("budget_dismissed_alerts",JSON.stringify(next));};
-  const clearAll=()=>{setDismissed([]);localStorage.removeItem("budget_dismissed_alerts");};
-  const cmByYear=chargesMontants.filter(r=>r.fields?.annee===annee);
-  const emByYear=epargneMontants.filter(r=>r.fields?.annee===annee);
-  const revByYear=revenus.filter(r=>r.fields?.annee===annee);
-  const allAlerts=[];
-  for(let m=0;m<12;m++){
-    const rev=revByYear.find(r=>r.fields?.mois===m+1);
-    const revTotal=(rev?.fields?.lionel||0)+(rev?.fields?.ophelie||0)+(rev?.fields?.prime_lionel||0)+(rev?.fields?.prime_ophelie||0);
-    const chgTotal=cmByYear.filter(r=>r.fields?.mois===m+1).reduce((s,r)=>s+(r.fields?.lionel||0)+(r.fields?.ophelie||0),0);
-    const epTotal=emByYear.filter(r=>r.fields?.mois===m+1).reduce((s,r)=>s+(r.fields?.montant||0),0);
-    const solde=revTotal-chgTotal-epTotal;
-    if(solde<0)allAlerts.push({key:`neg-${annee}-${m}`,type:"danger",icon:"⚠",msg:`${MOIS_FULL[m]} : Solde négatif de ${fmt(solde)}`});
-    if(epTotal===0&&revTotal>0)allAlerts.push({key:`noep-${annee}-${m}`,type:"warning",icon:"💡",msg:`${MOIS_FULL[m]} : Aucune épargne enregistrée`});
-    if(chgTotal>revTotal*0.8&&revTotal>0)allAlerts.push({key:`high-${annee}-${m}`,type:"warning",icon:"📊",msg:`${MOIS_FULL[m]} : Charges = ${((chgTotal/revTotal)*100).toFixed(0)}% des revenus`});
-  }
-  const alerts=allAlerts.filter(a=>!dismissed.includes(a.key));
-  const colors={danger:{bg:"#fef2f2",border:"#fca5a5",text:"#b91c1c"},warning:{bg:"#fffbeb",border:"#fcd34d",text:"#a16207"},success:{bg:"#f0fdf4",border:"#86efac",text:"#15803d"}};
-  return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
-    {dismissed.length>0&&<div style={{display:"flex",justifyContent:"flex-end",marginBottom:4}}><button className="btn-press" onClick={clearAll} style={{padding:"6px 14px",background:"transparent",border:"1px solid #ddd8d0",borderRadius:8,cursor:"pointer",fontSize:11,fontWeight:600,color:"#8a8578"}}>Réafficher les alertes ignorées ({dismissed.length})</button></div>}
-    {alerts.length===0&&<div className="fade-up" style={{display:"flex",alignItems:"center",gap:12,padding:"16px 20px",background:"#f0fdf4",border:"1px solid #86efac",borderRadius:12}}><span style={{fontSize:18}}>✓</span><span style={{fontSize:14,color:"#15803d",fontWeight:600}}>Tout est en ordre ! Aucune alerte active.</span></div>}
-    {alerts.map((a,i)=>{const c=colors[a.type];return(<div key={a.key} className="fade-up" style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:c.bg,border:`1px solid ${c.border}`,borderRadius:12,animation:`fadeUp .3s ease ${i*0.05}s both`}}>
-      <div style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:18}}>{a.icon}</span><span style={{fontSize:13,color:c.text,fontWeight:500}}>{a.msg}</span></div>
-      <button className="btn-press" onClick={()=>dismiss(a.key)} style={{padding:"4px 12px",background:"transparent",border:`1px solid ${c.border}`,borderRadius:6,cursor:"pointer",fontSize:11,fontWeight:600,color:c.text,whiteSpace:"nowrap"}}>Ignorer</button>
-    </div>);})}
-  </div>);
-}
-
 export default function BudgetApp(){
-  const[user,setUser]=useState(null);const[authChecked,setAuthChecked]=useState(false);const[tab,setTab]=useState("patrimoine");const[loading,setLoading]=useState(true);const[saving,setSaving]=useState(false);const[mois,setMois]=useState(new Date().getMonth());const[annee,setAnnee]=useState(2026);const[chartType,setChartType]=useState("bar");
-  const[revenus,setRevenus]=useState([]);const[charges,setCharges]=useState([]);const[chargesMontants,setChargesMontants]=useState([]);const[epargne,setEpargne]=useState([]);const[epargneMontants,setEpargneMontants]=useState([]);const[objectifs,setObjectifs]=useState([]);
-  const[showAddCharge,setShowAddCharge]=useState(false);const[showAddEpargne,setShowAddEpargne]=useState(false);
-  const[showAddVersement,setShowAddVersement]=useState(false);
-  const[nvDesc,setNvDesc]=useState("");const[nvMois,setNvMois]=useState(mois+1);const[nvMontant,setNvMontant]=useState(0);const[nvDest,setNvDest]=useState("");const[nvBenef,setNvBenef]=useState("Foyer");const[nvSource,setNvSource]=useState("Prime");
-  const[versementsPonctuels,setVersementsPonctuels]=useState([]);
-  // Charger les versements ponctuels depuis Airtable
-  useEffect(()=>{
-    if(!user)return;
-    fetchRecords("Epargne_ponctuelle").then(recs=>setVersementsPonctuels(recs||[])).catch(()=>{});
-  },[user]);
-  const ajouterVersement=async()=>{
-    if(!nvDesc.trim()||nvMontant<=0)return;
-    const moisStr=String(nvMois+1).padStart(2,"0");
-    const dateStr=`${annee}-${moisStr}-01`;
-    await save(async()=>{
-      const res=await createRecord("Epargne_ponctuelle",{label:nvDesc,date:dateStr,montant:nvMontant,destination:nvDest||"",beneficiaire:nvBenef||"Foyer",source:nvSource||"Prime"});
-      const newRec=res.records[0];
-      setVersementsPonctuels(p=>[...p,newRec]);
-    });
-    setShowAddVersement(false);setNvDesc("");setNvMontant(0);setNvDest("");setNvBenef("Foyer");setNvSource("Prime");
-  };
-  const supprimerVersement=async(id)=>{
-    await save(async()=>{await deleteRecord("Epargne_ponctuelle",id);setVersementsPonctuels(p=>p.filter(v=>v.id!==id));});
-  };const[delCharge,setDelCharge]=useState(null);const[delEpargne,setDelEpargne]=useState(null);const[delObjectif,setDelObjectif]=useState(null);const[initYearTarget,setInitYearTarget]=useState(null);
+  const[user,setUser]=useState(null);const[authChecked,setAuthChecked]=useState(false);const[tab,setTab]=useState("patrimoine");
   useEffect(()=>{try{localStorage.removeItem("budget_user");}catch{}fetch("/api/auth/me",{credentials:"same-origin",cache:"no-store"}).then(r=>r.ok?r.json():null).then(d=>{if(d?.user)setUser(d.user);}).catch(()=>{}).finally(()=>setAuthChecked(true));},[]);
   useEffect(()=>{const onUnauth=()=>setUser(null);window.addEventListener("bf-unauth",onUnauth);return()=>window.removeEventListener("bf-unauth",onUnauth);},[]);
-  const finary=useFinary(!!user&&!loading);
-  const loadData=useCallback(async()=>{setLoading(true);try{const[rev,chg,cm,ep,em,obj]=await Promise.all([fetchAll("Revenus"),fetchAll("Charges"),fetchAll("Charges_Montants"),fetchAll("Epargne"),fetchAll("Epargne_montants"),fetchAll("Objectifs")]);setRevenus(rev);setCharges(chg);setChargesMontants(cm);setEpargne(ep);setEpargneMontants(em);setObjectifs(obj);}catch(e){console.error(e);}setLoading(false);},[]);
-  useEffect(()=>{if(user)loadData();},[user,loadData]);
-  const save=async fn=>{setSaving(true);await fn();setTimeout(()=>setSaving(false),1500);};
+  const finary=useFinary(!!user);
   const logout=async()=>{try{await fetch("/api/auth/logout",{method:"POST",credentials:"same-origin"});}catch{}try{window.google?.accounts.id.disableAutoSelect();}catch{}setUser(null);};
-  const revByYear=useMemo(()=>revenus.filter(r=>r.fields?.annee===annee),[revenus,annee]);
-  const cmByYear=useMemo(()=>chargesMontants.filter(r=>r.fields?.annee===annee),[chargesMontants,annee]);
-  const emByYear=useMemo(()=>epargneMontants.filter(r=>r.fields?.annee===annee),[epargneMontants,annee]);
-  const getRevMois=m=>{const r=revByYear.find(r=>r.fields?.mois===m+1);return r?{id:r.id,lionel:r.fields.lionel||0,ophelie:r.fields.ophelie||0,prime_lionel:r.fields.prime_lionel||0,prime_ophelie:r.fields.prime_ophelie||0}:{lionel:0,ophelie:0,prime_lionel:0,prime_ophelie:0};};
-  const getCM=(cid,m)=>{const r=cmByYear.find(r=>{const l=r.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===cid&&r.fields?.mois===m+1;});return r?{id:r.id,lionel:r.fields.lionel||0,ophelie:r.fields.ophelie||0}:null;};
-  const getEM=(eid,m)=>{const r=emByYear.find(r=>{const l=r.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===eid&&r.fields?.mois===m+1;});return r?{id:r.id,montant:r.fields.montant||0}:null;};
-  const totalChgMois=m=>cmByYear.filter(r=>r.fields?.mois===m+1).reduce((s,r)=>s+(r.fields.lionel||0)+(r.fields.ophelie||0),0);
-  const totalEpMois=m=>emByYear.filter(r=>r.fields?.mois===m+1).reduce((s,r)=>s+(r.fields.montant||0),0);
-  const chargesByCat=useMemo(()=>{const map={};charges.forEach(c=>{const cat=c.fields?.categorie||"Autre";if(!map[cat])map[cat]=[];map[cat].push(c);});Object.values(map).forEach(a=>a.sort((a,b)=>(a.fields?.ordre||0)-(b.fields?.ordre||0)));return map;},[charges]);
-  const availYears=useMemo(()=>{const y=new Set([2026,2027,2028,2029,2030]);revenus.forEach(r=>{if(r.fields?.annee)y.add(r.fields.annee);});return[...y].sort();},[revenus]);
-  const chartData=useMemo(()=>MOIS.map((m,i)=>{const r=getRevMois(i);return{mois:m,revenus:r.lionel+r.ophelie+(r.prime_lionel||0)+(r.prime_ophelie||0),charges:totalChgMois(i),epargne:totalEpMois(i),solde:(r.lionel+r.ophelie+(r.prime_lionel||0)+(r.prime_ophelie||0))-totalChgMois(i)-totalEpMois(i)};}),[revByYear,cmByYear,emByYear]);
-  const pieData=useMemo(()=>{const map={};charges.forEach(c=>{const cat=c.fields?.categorie||"Autre";const t=cmByYear.filter(cm=>{const l=cm.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===c.id&&cm.fields?.mois===mois+1;}).reduce((s,cm)=>s+(cm.fields.lionel||0)+(cm.fields.ophelie||0),0);map[cat]=(map[cat]||0)+t;});return Object.entries(map).filter(([,v])=>v>0).map(([name,value])=>({name,value}));},[charges,cmByYear,mois]);
-  const handleInitYear=async y=>{if(revenus.some(r=>r.fields?.annee===y)){setAnnee(y);return;}setInitYearTarget(y);};
-  const doInitYear=async mode=>{const y=initYearTarget;const prevY=y-1;setInitYearTarget(null);setSaving(true);try{if(mode==="duplicate"){for(let m=1;m<=12;m++){const prev=revenus.find(r=>r.fields?.annee===prevY&&r.fields?.mois===m);await createRecord("Revenus",{mois:m,annee:y,lionel:prev?.fields?.lionel||0,ophelie:prev?.fields?.ophelie||0});}for(const c of charges){for(let m=1;m<=12;m++){const prev=chargesMontants.find(r=>{const l=r.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===c.id&&r.fields?.annee===prevY&&r.fields?.mois===m;});await createRecord("Charges_Montants",{mois:m,annee:y,lionel:prev?.fields?.lionel||0,ophelie:prev?.fields?.ophelie||0,charge_id:[c.id]});}}for(const ep of epargne){for(let m=1;m<=12;m++){const prev=epargneMontants.find(r=>{const l=r.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===ep.id&&r.fields?.annee===prevY&&r.fields?.mois===m;});await createRecord("Epargne_montants",{mois:m,annee:y,montant:prev?.fields?.montant||0,epargne_id:[ep.id]});}}}else{for(let m=1;m<=12;m++)await createRecord("Revenus",{mois:m,annee:y,lionel:0,ophelie:0});for(const c of charges)for(let m=1;m<=12;m++)await createRecord("Charges_Montants",{mois:m,annee:y,lionel:0,ophelie:0,charge_id:[c.id]});for(const ep of epargne)for(let m=1;m<=12;m++)await createRecord("Epargne_montants",{mois:m,annee:y,montant:0,epargne_id:[ep.id]});}await loadData();setAnnee(y);}catch(e){console.error(e);alert("Erreur");}setSaving(false);};
-  const handleDeleteCharge=async(mode,selMois)=>{const c=delCharge;setDelCharge(null);await save(async()=>{if(mode==="all"){const cmIds=chargesMontants.filter(r=>{const l=r.fields?.charge_id;return(Array.isArray(l)?l[0]:l)===c.id;}).map(r=>r.id);await batchDelete("Charges_Montants",cmIds);await deleteRecord("Charges",c.id);}else{for(const m of selMois){const cm=getCM(c.id,m);if(cm?.id)await updateRecord("Charges_Montants",cm.id,{lionel:0,ophelie:0});}}await loadData();});};
-  const handleDeleteEpargne=async()=>{const ep=delEpargne;setDelEpargne(null);await save(async()=>{const emIds=epargneMontants.filter(r=>{const l=r.fields?.epargne_id;return(Array.isArray(l)?l[0]:l)===ep.id;}).map(r=>r.id);await batchDelete("Epargne_montants",emIds);await deleteRecord("Epargne",ep.id);await loadData();});};
-  const handleDeleteObjectif=async()=>{const obj=delObjectif;setDelObjectif(null);await save(async()=>{await deleteRecord("Objectifs",obj.id);await loadData();});};
   if(!authChecked)return null;
   if(!user)return<LoginPage onLogin={setUser}/>;
-  if(loading)return(<><GlobalStyles/><div className="grain"/><div style={{minHeight:"100vh",background:"#faf9f7",display:"flex",flexDirection:"column"}}><div style={{background:"#1a1a2e",padding:"20px 36px"}}><div style={{fontFamily:"'DM Serif Display',serif",color:"#faf9f7",fontSize:22}}>Budget Familial {annee}</div></div><div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{textAlign:"center"}}><div style={{width:40,height:40,border:"3px solid #e8e4dd",borderTopColor:"#1a1a2e",borderRadius:"50%",animation:"pulse 1s infinite",margin:"0 auto 16px"}}/><p style={{color:"#8a8578",fontSize:14}}>Chargement...</p></div></div></div></>);
-  const rev=getRevMois(mois),chgT=totalChgMois(mois),epT=totalEpMois(mois),revTotal=rev.lionel+rev.ophelie+(rev.prime_lionel||0)+(rev.prime_ophelie||0),solde=revTotal-chgT-epT;
-  const prevM=mois>0?mois-1:11;
-  const prevAnnee=mois>0?annee:annee-1;
-  const hasPrevData=revenus.some(r=>r.fields?.annee===prevAnnee);
-  const prevRevByYear=revenus.filter(r=>r.fields?.annee===prevAnnee);
-  const prevCmByYear=chargesMontants.filter(r=>r.fields?.annee===prevAnnee);
-  const prevEmByYear=epargneMontants.filter(r=>r.fields?.annee===prevAnnee);
-  const getPrevRevMois=()=>{const r=prevRevByYear.find(r=>r.fields?.mois===prevM+1);return r?{lionel:r.fields.lionel||0,ophelie:r.fields.ophelie||0,prime_lionel:r.fields.prime_lionel||0,prime_ophelie:r.fields.prime_ophelie||0}:{lionel:0,ophelie:0,prime_lionel:0,prime_ophelie:0};};
-  const prevRev=getPrevRevMois();
-  const prevChg=prevCmByYear.filter(r=>r.fields?.mois===prevM+1).reduce((s,r)=>s+(r.fields.lionel||0)+(r.fields.ophelie||0),0);
-  const prevEp=prevEmByYear.filter(r=>r.fields?.mois===prevM+1).reduce((s,r)=>s+(r.fields.montant||0),0);
-  const prevSolde=(prevRev.lionel+prevRev.ophelie+(prevRev.prime_lionel||0)+(prevRev.prime_ophelie||0))-prevChg-prevEp;
   const CS={background:"#fff",borderRadius:16,padding:24,border:"1px solid rgba(26,26,46,0.06)",boxShadow:"0 2px 12px rgba(26,26,46,0.04)"};
-  const thS={textAlign:"left",padding:"12px 14px",borderBottom:"2px solid #e8e4dd",color:"#8a8578",fontWeight:600,fontSize:10,textTransform:"uppercase",letterSpacing:"0.08em"};
-  const tdS={padding:"12px 14px",borderBottom:"1px solid #f2efeb"};
-  const iS={padding:"8px 12px",border:"1px solid #ddd8d0",borderRadius:8,fontSize:13,width:90,outline:"none",textAlign:"right",background:"#faf9f7",fontFamily:"'DM Sans',sans-serif"};
-  const bP={padding:"8px 18px",background:"#1a1a2e",color:"#faf9f7",border:"none",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:600};
-  const bG={padding:"8px 16px",background:"transparent",color:"#8a8578",border:"1px solid #ddd8d0",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:500};
-  const bD={padding:"5px 10px",background:"transparent",color:"#b91c1c",border:"1px solid #f5c6c6",borderRadius:7,cursor:"pointer",fontSize:10,fontWeight:600};
-  const mB=(a)=>({padding:"7px 14px",border:a?"2px solid #1a1a2e":"1px solid #ddd8d0",borderRadius:9,cursor:"pointer",fontSize:12,fontWeight:a?700:400,background:a?"rgba(26,26,46,0.06)":"#fff",color:a?"#1a1a2e":"#8a8578"});
   const tabs=[["patrimoine","Patrimoine"],["budget_reel","Budget réel"],["placements","Comptes"],["impots","Simulateur IR"],["assistant","Assistant IA"],["immobilier","🏠 Immobilier"]];
   return(<><GlobalStyles/><div className="grain"/><div style={{minHeight:"100vh",background:"#faf9f7"}}>
-    {saving&&<div className="fade-in" style={{position:"fixed",bottom:24,right:24,background:"#1a1a2e",color:"#faf9f7",padding:"10px 20px",borderRadius:12,fontSize:13,fontWeight:600,boxShadow:"0 8px 30px rgba(26,26,46,0.2)",zIndex:2000,display:"flex",alignItems:"center",gap:8}}><div style={{width:8,height:8,borderRadius:"50%",background:"#4ade80",animation:"pulse 1s infinite"}}/>Sauvegarde...</div>}
     <div style={{background:"#1a1a2e",padding:"0 max(16px,calc((100% - 1320px)/2 + 36px))",position:"sticky",top:0,zIndex:100}}><div className="header-inner">
       <div style={{display:"flex",alignItems:"center",gap:16}}><div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#2d2b55,#44427a)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#faf9f7" strokeWidth="2" strokeLinecap="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div><div><div style={{fontFamily:"'DM Serif Display',serif",color:"#faf9f7",fontSize:18}}>Budget Familial</div><div style={{color:"#7a7890",fontSize:11,fontWeight:500}}>Tchamfong</div></div></div>
       <div className="header-right" style={{display:"flex",alignItems:"center",gap:14}}>
@@ -563,10 +370,10 @@ export default function BudgetApp(){
     <div style={{background:"#fff",borderBottom:"1px solid #e8e4dd",position:"sticky",top:68,zIndex:99}}><div className="nav-wrap">{tabs.map(([k,l])=><button key={k} className="btn-press" onClick={()=>setTab(k)} style={{padding:"8px 14px",border:"none",borderRadius:9,cursor:"pointer",fontSize:13,fontWeight:600,background:tab===k?"#1a1a2e":"transparent",color:tab===k?"#faf9f7":"#8a8578",whiteSpace:"nowrap",position:"relative"}}>{l}</button>)}</div></div>
     <div className="content-wrap">
     {tab==="patrimoine"&&<PatrimoineTab finary={finary}/>}
-    {tab==="budget_reel"&&<BudgetReelTab finary={finary} revenus={revenus} chargesMontants={chargesMontants} epargneMontants={epargneMontants}/>}
+    {tab==="budget_reel"&&<BudgetReelTab finary={finary}/>}
     {tab==="placements"&&<ComptesTab finary={finary}/>}
     {tab==="impots"&&<div className="fade-up"><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:20}}>Simulateur Impôt sur le Revenu</h3><TaxSimulator/></div>}
-    {tab==="assistant"&&<div className="fade-up" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:16}}>Assistant budgétaire IA</h3><AIAssistant revenus={revenus} charges={charges} chargesMontants={chargesMontants} epargne={epargne} epargneMontants={epargneMontants} objectifs={objectifs} annee={annee} finaryData={finary.data}/></div>}
+    {tab==="assistant"&&<div className="fade-up" style={CS}><h3 style={{fontFamily:"'DM Serif Display',serif",fontSize:20,marginBottom:16}}>Assistant budgétaire IA</h3><AIAssistant finaryData={finary.data}/></div>}
     
     {tab==="immobilier"&&<div className="fade-up">
       <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:28,paddingBottom:20,borderBottom:"1px solid #e8e4dd"}}>
@@ -581,12 +388,6 @@ export default function BudgetApp(){
     </div>
     <div style={{textAlign:"center",padding:"40px 0 24px",color:"#c4c0b8",fontSize:11}}>Budget Familial Tchamfong · {new Date().getFullYear()}</div>
   </div>
-  {showAddCharge&&<AddChgModal cats={Object.keys(chargesByCat)} onClose={()=>setShowAddCharge(false)} onAdd={async d=>{await save(async()=>{const res=await createRecord("Charges",{description:d.description,categorie:d.categorie,compte:d.compte,ordre:charges.length+1});const nid=res.records[0].id;for(let m=0;m<12;m++)await createRecord("Charges_Montants",{mois:m+1,annee,lionel:d.moisList.includes(m)?d.lionel:0,ophelie:d.moisList.includes(m)?d.ophelie:0,charge_id:[nid]});await loadData();});setShowAddCharge(false);}}/>}
-  {showAddEpargne&&<AddEpModal onClose={()=>setShowAddEpargne(false)} onAdd={async d=>{await save(async()=>{const res=await createRecord("Epargne",{type:d.type,beneficiaire:d.beneficiaire,ordre:epargne.length+1});const nid=res.records[0].id;for(let m=1;m<=12;m++)await createRecord("Epargne_montants",{mois:m,annee,montant:0,epargne_id:[nid]});if(d.objectif>0)await createRecord("Objectifs",{type:`${d.type} ${d.beneficiaire}`,objectif_annuel:d.objectif});await loadData();});setShowAddEpargne(false);}}/>}
-  {delCharge&&<DeleteChargeModal charge={delCharge} onClose={()=>setDelCharge(null)} onDelete={handleDeleteCharge}/>}
-  {delEpargne&&<ConfirmModal title="Supprimer un type d'épargne" message={`Supprimer "${delEpargne.fields?.type} — ${delEpargne.fields?.beneficiaire}" et tous ses montants ?`} onCancel={()=>setDelEpargne(null)} onConfirm={handleDeleteEpargne} confirmLabel="Supprimer"/>}
-  {delObjectif&&<ConfirmModal title="Supprimer un objectif" message={`Supprimer l'objectif "${delObjectif.fields?.type}" ?`} onCancel={()=>setDelObjectif(null)} onConfirm={handleDeleteObjectif} confirmLabel="Supprimer"/>}
-  {initYearTarget&&<InitYearModal targetYear={initYearTarget} prevYear={initYearTarget-1} onClose={()=>setInitYearTarget(null)} onInit={doInitYear}/>}
   </>);
 }
 
