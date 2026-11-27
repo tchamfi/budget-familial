@@ -19,6 +19,7 @@ const TABLES = {
   synthese: "Finary_Synthese",
   semaine: "Finary_Semaine",
   marchands: "Finary_Marchands",
+  transactions: "Finary_Transactions",
 };
 
 // Le site n'affiche que les semaines récentes. Tout l'historique reste dans Airtable.
@@ -27,6 +28,8 @@ const FILTRES = {
   semaine: "IS_AFTER({debut}, DATEADD(TODAY(), -183, 'days'))",
   // Le site n'affiche que la dernière semaine. 5 semaines gardent une marge si une synchro saute.
   marchands: "IS_AFTER({debut}, DATEADD(TODAY(), -35, 'days'))",
+  // Onglet Opérations : les 4 dernières semaines (la plus ancienne commence au plus 34 jours avant aujourd'hui).
+  transactions: "IS_AFTER({semaine}, DATEADD(TODAY(), -35, 'days'))",
 };
 
 // Cache partagé entre toutes les instances Vercel (cache de données de Next).
@@ -90,7 +93,7 @@ async function lireAirtable() {
 }
 
 // La semaine fait partie de la clé : le premier passage après le dimanche 7 h relit Airtable.
-const lireEnCache = unstable_cache(async (_semaine) => lireAirtable(), ["finary-airtable-v2"], {
+const lireEnCache = unstable_cache(async (_semaine) => lireAirtable(), ["finary-airtable-v3"], {
   revalidate: CACHE_SECONDS,
   tags: [CACHE_TAG],
 });
