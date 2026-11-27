@@ -3,6 +3,9 @@
 // Les données viennent des tables Finary_* d'Airtable (mises à jour chaque semaine par Claude),
 // lues via /api/finary, en lecture seule.
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { analyser, mouvements, totaux, libelleNoeud, HORS_QUOTIDIEN, FILLES } from "../lib/flux";
+import { posteLabel } from "../lib/postes";
+import { HeroActions, useHeroText, ReloadButton } from "./ui";
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, LineChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell,
 } from "recharts";
@@ -33,16 +36,16 @@ const frDateTime = (iso) => {
 const daysBetween = (a, b) => Math.floor((new Date(b) - new Date(a)) / 86400000);
 
 // ─── Styles (mêmes codes visuels que BudgetApp) ────────────────────────────
-const C = { ink: "#1a1a2e", muted: "#8a8578", line: "#e8e4dd", soft: "#f2efeb", blue: "#1e40af", violet: "#6d28d9", green: "#15803d", red: "#b91c1c", orange: "#c2410c", teal: "#0e7490", pink: "#be185d", gold: "#a16207" };
-const CS = { background: "#fff", borderRadius: 16, padding: 24, border: "1px solid rgba(26,26,46,0.06)", boxShadow: "0 2px 12px rgba(26,26,46,0.04)" };
-const H3 = { fontFamily: "'DM Serif Display',serif", fontSize: 20, margin: 0, color: C.ink };
-const LBL = { fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.08em" };
+const C = { ink: "#12305c", muted: "#4b5b72", line: "#d5dde8", soft: "#eef2f8", blue: "#3462b0", violet: "#8e5db8", green: "#0e8fa1", red: "#b42318", orange: "#b0660f", teal: "#13a1b5", pink: "#13a1b5", gold: "#cc7d1d" };
+const CS = { background: "#fff", borderRadius: 32, padding: 28, boxShadow: "0 1px 2px rgba(11,27,51,.05), 0 18px 36px -16px rgba(18,48,92,.3)" };
+const H3 = { fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 20, margin: 0, color: "#0b1b33" };
+const LBL = { fontSize: 12, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" };
 const TH = { textAlign: "left", padding: "10px 12px", borderBottom: `2px solid ${C.line}`, color: C.muted, fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" };
-const TD = { padding: "10px 12px", borderBottom: "1px solid #f2efeb", fontSize: 13 };
-const chip = (active) => ({ padding: "7px 14px", border: active ? `2px solid ${C.ink}` : "1px solid #ddd8d0", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: active ? 700 : 400, background: active ? "rgba(26,26,46,0.06)" : "#fff", color: active ? C.ink : C.muted });
+const TD = { padding: "11px 12px", borderBottom: "1px solid #e6ebf3", fontSize: 13 };
+const chip = (active) => ({ padding: "8px 14px", border: "none", borderRadius: 999, cursor: "pointer", fontSize: 13, fontWeight: active ? 800 : 600, background: active ? "linear-gradient(180deg,#2a5394,#12305c)" : "#eef2f8", color: active ? "#fff" : "#0b1b33", boxShadow: active ? "0 4px 10px rgba(18,48,92,.4)" : "inset 0 1px 3px rgba(11,27,51,.1)" });
 
 const PEOPLE = ["Lionel", "Ophélie", "Noémie", "Alizée", "Camille"];
-const PERSON_COLOR = { Foyer: C.ink, Lionel: C.blue, "Ophélie": C.pink, "Noémie": C.teal, "Alizée": C.violet, Camille: C.gold };
+const PERSON_COLOR = { Foyer: C.ink, Lionel: "#3462b0", "Ophélie": "#13a1b5", "Noémie": "#8e5db8", "Alizée": "#a982cc", Camille: "#5c3580" };
 const TYPE_LABEL = { checking: "Comptes courants", saving: "Livrets", investment: "Placements", crypto: "Crypto", "real-estate": "Immobilier", loan: "Prêts", credit: "Crédits", startup: "Startups", other: "Autres" };
 const TYPE_COLOR = { "real-estate": C.blue, investment: C.violet, saving: C.green, checking: C.teal, crypto: C.orange, startup: C.gold, other: C.muted };
 const MIX_ORDER = ["real-estate", "investment", "saving", "checking", "crypto", "startup", "other"];
@@ -92,9 +95,10 @@ function synthese(data, key) {
 // ─── Briques d'interface ────────────────────────────────────────────────────
 function Kpi({ label, value, sub, color = C.ink, i = 0 }) {
   return (
-    <div className={`card-hover fade-up stagger-${Math.min(i + 1, 4)}`} style={{ ...CS, borderTop: `3px solid ${color}`, padding: 20 }}>
+    <div className={`lift fade-up stagger-${Math.min(i + 1, 4)}`} style={{ ...CS, borderRadius: 28, padding: 22 }}>
+      <span aria-hidden="true" style={{ display: "block", width: 34, height: 6, borderRadius: 999, background: color, marginBottom: 12 }} />
       <div style={LBL}>{label}</div>
-      <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 26, color, marginTop: 8, lineHeight: 1.15 }}>{value}</div>
+      <div style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 30, color: color === C.ink ? "#12305c" : color, marginTop: 8, lineHeight: 1.15, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>{value}</div>
       {sub && <div style={{ fontSize: 12, color: C.muted, marginTop: 6, lineHeight: 1.5 }}>{sub}</div>}
     </div>
   );
@@ -122,32 +126,24 @@ function Progress({ value, color = C.green }) {
   );
 }
 function Toggle({ checked, onChange, label }) {
+  // Affiché dans le bandeau bleu : texte clair, piste cyan quand l'option est active.
   return (
-    <label style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, color: C.ink, userSelect: "none" }}>
-      <span onClick={() => onChange(!checked)} role="switch" aria-checked={checked} style={{ width: 34, height: 20, borderRadius: 10, background: checked ? C.ink : "#ddd8d0", position: "relative", transition: "background .2s" }}>
-        <span style={{ position: "absolute", top: 2, left: checked ? 16 : 2, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+    <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)} className="hero-toggle">
+      <span className="hero-toggle-track" style={{ background: checked ? "linear-gradient(180deg,#7fe0ec,#1fb5c9)" : "rgba(255,255,255,.22)" }}>
+        <span style={{ position: "absolute", top: 3, left: checked ? 19 : 3, width: 16, height: 16, borderRadius: "50%", background: "#fff", boxShadow: "0 2px 4px rgba(11,27,51,.35)", transition: "left .2s" }} />
       </span>
-      <span onClick={() => onChange(!checked)}>{label}</span>
-    </label>
+      {label}
+    </button>
   );
 }
 function TabHeader({ title, finary, children }) {
   const sync = synthese(finary.data, "derniere_synchro").texte;
+  useHeroText({ title, sub: sync ? `Données Finary du ${frDateTime(sync)}. Mise à jour automatique chaque semaine.` : undefined });
   return (
-    <div className="section-header">
-      <div>
-        <h3 style={H3}>{title}</h3>
-        <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
-          {sync ? `Données Finary du ${frDateTime(sync)}. Mise à jour automatique chaque semaine.` : "Données Finary"}
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        {children}
-        <button className="btn-press" onClick={() => finary.reload(true)} disabled={finary.loading} style={{ padding: "8px 16px", background: "transparent", color: C.muted, border: "1px solid #ddd8d0", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 500 }}>
-          {finary.loading ? "Chargement…" : "Recharger"}
-        </button>
-      </div>
-    </div>
+    <HeroActions>
+      {children}
+      <ReloadButton finary={finary} />
+    </HeroActions>
   );
 }
 function Gate({ finary, children }) {
@@ -158,7 +154,7 @@ function Gate({ finary, children }) {
         <>
           <div style={{ ...H3, fontSize: 18 }}>Données indisponibles</div>
           <p style={{ color: C.muted, fontSize: 13, margin: "10px 0 18px" }}>{finary.error}</p>
-          <button className="btn-press" onClick={() => finary.reload(true)} style={{ padding: "8px 18px", background: C.ink, color: "#faf9f7", border: "none", borderRadius: 9, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Réessayer</button>
+          <button className="btn-press" onClick={() => finary.reload(true)} style={{ padding: "10px 20px", background: "linear-gradient(180deg,#2a5394,#12305c)", color: "#fff", border: "none", borderRadius: 999, cursor: "pointer", fontSize: 13, fontWeight: 800 }}>Réessayer</button>
         </>
       ) : (
         <p style={{ color: C.muted, fontSize: 14 }}>Chargement des données…</p>
@@ -320,7 +316,7 @@ export function PatrimoineTab({ finary }) {
                 return (
                   <div key={p.name} style={{ border: `1px solid ${C.line}`, borderRadius: 14, padding: 16, borderLeft: `4px solid ${PERSON_COLOR[p.name]}` }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{p.name}</div>
-                    <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 22, color: C.ink, margin: "6px 0 10px" }}>{eur(withRe ? p.net : p.netSansImmo)}</div>
+                    <div style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 22, color: C.ink, margin: "6px 0 10px" }}>{eur(withRe ? p.net : p.netSansImmo)}</div>
                     <Bar100 parts={parts} />
                     <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 10 }}>
                       {parts.filter((x) => x.value > 0.5).map((x) => (
@@ -460,11 +456,15 @@ function PretCard({ pret, syncIso }) {
 // ─── Onglet Budget réel ─────────────────────────────────────────────────────
 // ─── Semaine (du dimanche au samedi) ────────────────────────────────────────
 // Dépenses du quotidien : tout sauf les flux fixes ou internes ci-dessous.
-const HORS_QUOTIDIEN = new Set(["investment", "transfer", "loan_payment", "taxes", "bills_and_utilities", "fees", "business_and_work", "income", "refunds"]);
 const JOURS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
 const dayLong = (iso) => {
   const d = new Date(`${iso}T12:00:00`);
   return Number.isNaN(d.getTime()) ? iso : `${JOURS[d.getDay()]} ${d.getDate() === 1 ? "1er" : d.getDate()} ${MOIS_L[d.getMonth()]}`;
+};
+const addDays = (iso, n) => {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
 };
 const deltaPct = (a, b) => (b ? (a - b) / b : null);
 const signed = (x, digits = 0) => (x == null ? "—" : `${x > 0 ? "+" : ""}${pct(x, digits)}`);
@@ -807,7 +807,7 @@ export function BudgetReelTab({ finary }) {
                         </td>
                         <td style={TD}>
                           <div style={{ height: 8, background: C.soft, borderRadius: 4 }}>
-                            <div style={{ width: `${(r.depenses / maxDep) * 100}%`, height: "100%", background: internal ? "#c4c0b8" : C.ink, borderRadius: 4 }} />
+                            <div style={{ width: `${(r.depenses / maxDep) * 100}%`, height: "100%", background: internal ? "#a9bcd9" : C.ink, borderRadius: 4 }} />
                           </div>
                         </td>
                         <td style={{ ...TD, textAlign: "right", fontWeight: 700 }}>{eur(r.depenses)}</td>
@@ -828,7 +828,7 @@ export function BudgetReelTab({ finary }) {
             <div className="fade-up" style={{ ...CS, display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center" }}>
               <div>
                 <div style={LBL}>Charges récurrentes détectées</div>
-                <div style={{ fontFamily: "'DM Serif Display',serif", fontSize: 26, marginTop: 6 }}>{eur(rec)} <span style={{ fontSize: 14, color: C.muted, fontFamily: "'DM Sans',sans-serif" }}>par mois</span></div>
+                <div style={{ fontFamily: "'Manrope',sans-serif", fontWeight: 800, fontSize: 26, marginTop: 6 }}>{eur(rec)} <span style={{ fontSize: 14, color: C.muted, fontFamily: "'Manrope',sans-serif" }}>par mois</span></div>
               </div>
               <p style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, flex: 1, minWidth: 220 }}>
                 {recN ? `${recN} prélèvements mensuels repérés par Finary. ` : ""}Les charges annuelles (assurances, taxe foncière) n'y figurent pas : c'est un minimum, pas le total de tes charges fixes.
@@ -841,428 +841,6 @@ export function BudgetReelTab({ finary }) {
   );
 }
 
-// ─── Onglet Comptes & placements ────────────────────────────────────────────
-// ─── Onglet Opérations ──────────────────────────────────────────────────────
-// Les opérations une à une des 4 dernières semaines (dimanche au samedi), classées par Finary.
-// Le classement vient de Finary : catégories de la banque, puis règles Finary (sous-catégories).
-const SOUS_CAT_FR = {
-  groceries: "Courses", dining_out: "Restaurants", fast_food: "Restauration rapide et livraison", coffee_shop: "Cafés", snacks: "En-cas", alcohol_and_bars: "Bars",
-  fuel: "Carburant", repairs: "Entretien et réparations", public_transport: "Transports en commun", taxi: "Taxi et VTC", parking: "Stationnement", insurance: "Assurance auto",
-  tolls: "Péages", train_tickets: "Train", plane_tickets: "Avion", car_rental: "Location de voiture", car_wash: "Lavage",
-  electricity: "Électricité", water: "Eau", internet: "Internet", mobile_phone: "Téléphone mobile", heating: "Chauffage", trash_and_recycling: "Ordures", bills_subscriptions: "Abonnements et contrats",
-  subscriptions: "Abonnements", sports_and_recreation: "Sport", movie_and_theater: "Cinéma et spectacles", hobbies: "Loisirs", vacations: "Vacances", art_and_museum: "Musées",
-  medication: "Pharmacie", doctor_visit: "Médecin", dentist_visit: "Dentiste", health_insurance: "Mutuelle", optician: "Opticien", medical_equipment: "Matériel médical",
-  clothing: "Vêtements", personal_care: "Soins et beauté", childcare: "Garde d'enfants", education: "Scolarité", tuition: "Frais de scolarité", personal_gifts: "Cadeaux",
-  pets: "Animaux", supplies: "Maison", rent: "Loyer", tobacco: "Tabac", student_housing: "Logement étudiant",
-  bank_fees: "Frais bancaires", late_fees: "Pénalités", service_charge: "Frais de service",
-  internal_transfer: "Virements internes", external_transfer: "Virements à des tiers", gifts_transfer: "Dons et cadeaux", bill_payment: "Paiement de factures", international_transfer: "Transferts internationaux",
-  online_services: "Services en ligne", professional_services: "Services pro", withdrawal: "Retraits", income_taxes: "Impôt sur le revenu", property_taxes: "Taxe foncière", social_contributions: "Cotisations sociales",
-};
-// Comptes d'épargne et de placement : ce qui y entre ou en sort n'est pas une dépense.
-const COMPTE_EPARGNE = /\b(PEA|LIVRET|LDD|LINXEA|PORTFOLIO|PER|CTO|KRAKEN|CRYPTO|ASSURANCE VIE|PLAN EPARGNE)\b/i;
-const NATURES = {
-  quotidien: { label: "Dépenses du quotidien", color: C.ink },
-  charges: { label: "Charges et autres sorties", color: C.orange },
-  epargne: { label: "Mis de côté", color: C.green },
-  entrees: { label: "Entrées", color: C.blue },
-  interne: { label: "Mouvements internes", color: C.muted },
-};
-const VUES = [
-  ["sorties", "Sorties", ["quotidien", "charges"]],
-  ["quotidien", "Quotidien", ["quotidien"]],
-  ["charges", "Charges", ["charges"]],
-  ["epargne", "Mis de côté", ["epargne"]],
-  ["entrees", "Entrées", ["entrees"]],
-  ["interne", "Mouvements internes", ["interne"]],
-  ["tout", "Tout", ["quotidien", "charges", "epargne", "entrees", "interne"]],
-];
-function natureOf(t) {
-  if (t.exclue || COMPTE_EPARGNE.test(t.compte || "") || t.sous_categorie === "internal_transfer") return "interne";
-  if (t.categorie === "investment") return "epargne";
-  if ((t.montant || 0) >= 0) return "entrees";
-  return HORS_QUOTIDIEN.has(t.categorie) ? "charges" : "quotidien";
-}
-// Finary ne donne pas toujours le nom français d'une sous-catégorie : on part du nôtre, puis du sien.
-const sousCatLabel = (t) => (t.sous_categorie ? SOUS_CAT_FR[t.sous_categorie] || t.sous_categorie_libelle || t.sous_categorie : null);
-const posteLabel = (t) => {
-  const cat = t.categorie_libelle || t.categorie || "Sans catégorie";
-  const sc = sousCatLabel(t);
-  return sc ? `${cat} › ${sc}` : cat;
-};
-const weekRange = (debut) => {
-  const d = new Date(`${debut}T12:00:00`);
-  const f = new Date(d.getTime() + 6 * 86400000);
-  const short = (x) => `${x.getDate() === 1 ? "1er" : x.getDate()} ${MOIS_C[x.getMonth()]}`;
-  return `${short(d)} au ${short(f)}`;
-};
-const addDays = (iso, n) => {
-  const d = new Date(`${iso}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-};
-const dayShort = (iso) => {
-  const d = new Date(`${iso}T12:00:00`);
-  return Number.isNaN(d.getTime()) ? iso : `${JOURS[d.getDay()].slice(0, 3)}. ${d.getDate()}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-};
-
-function operationsView(rows = []) {
-  const weeks = [...new Set(rows.map((t) => t.semaine).filter(Boolean))].sort().reverse().slice(0, 4);
-  const tx = rows
-    .filter((t) => weeks.includes(t.semaine))
-    .map((t) => ({ ...t, montant: +t.montant || 0, nature: natureOf(t) }));
-  return { weeks, tx };
-}
-function totals(tx) {
-  const by = (n) => tx.filter((t) => t.nature === n);
-  return {
-    quotidien: -sum(by("quotidien"), (t) => t.montant),
-    charges: -sum(by("charges"), (t) => t.montant),
-    epargne: -sum(by("epargne"), (t) => t.montant),
-    entrees: sum(by("entrees"), (t) => t.montant),
-    n: Object.fromEntries(Object.keys(NATURES).map((k) => [k, by(k).length])),
-  };
-}
-function groupPostes(tx) {
-  const m = new Map();
-  for (const t of tx) {
-    const key = `${t.nature}|${t.categorie}|${t.sous_categorie || ""}`;
-    if (!m.has(key)) m.set(key, { key, nature: t.nature, label: posteLabel(t), sansSousCat: !t.sous_categorie, rows: [], total: 0 });
-    const g = m.get(key);
-    g.rows.push(t);
-    g.total += -t.montant;
-  }
-  return [...m.values()]
-    .map((g) => ({ ...g, rows: g.rows.sort((a, b) => b.date.localeCompare(a.date) || a.montant - b.montant) }))
-    .sort((a, b) => b.total - a.total);
-}
-
-export function OperationsTab({ finary }) {
-  const d = finary.data;
-  const v = useMemo(() => operationsView(d?.transactions || []), [d]);
-  const [sem, setSem] = useState(null);
-  const [vue, setVue] = useState("sorties");
-  const [compte, setCompte] = useState("");
-  const [q, setQ] = useState("");
-  const [open, setOpen] = useState(() => new Set());
-  const week = sem && v.weeks.includes(sem) ? sem : v.weeks[0];
-  const prevWeek = v.weeks[v.weeks.indexOf(week) + 1] || null;
-  const comptes = useMemo(() => [...new Set(v.tx.map((t) => t.compte).filter(Boolean))].sort(), [v]);
-  const ofWeek = (w) => v.tx.filter((t) => t.semaine === w && (!compte || t.compte === compte));
-  const cur = week ? ofWeek(week) : [];
-  const tot = totals(cur);
-  const totPrev = prevWeek ? totals(ofWeek(prevWeek)) : null;
-  const sorties = cur.filter((t) => t.nature === "quotidien" || t.nature === "charges");
-  const postes = groupPostes(sorties);
-  const maxPoste = Math.max(1, ...postes.map((p) => p.total));
-  const totalSorties = tot.quotidien + tot.charges;
-  const sansSousCat = sorties.filter((t) => !t.sous_categorie);
-  const natures = VUES.find(([k]) => k === vue)[2];
-  const needle = q.trim().toLowerCase();
-  const liste = cur
-    .filter((t) => natures.includes(t.nature))
-    .filter((t) => !needle || (t.libelle || "").toLowerCase().includes(needle) || posteLabel(t).toLowerCase().includes(needle))
-    .sort((a, b) => b.date.localeCompare(a.date) || a.montant - b.montant);
-  const toggle = (k) =>
-    setOpen((s) => {
-      const n = new Set(s);
-      n.has(k) ? n.delete(k) : n.add(k);
-      return n;
-    });
-  const vsPrev = totPrev ? deltaPct(tot.quotidien, totPrev.quotidien) : null;
-
-  return (
-    <Gate finary={finary}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        <TabHeader title="Opérations" finary={finary} />
-        {!week ? (
-          <div className="fade-up" style={CS}>
-            <p style={{ fontSize: 14, color: C.muted, margin: 0 }}>Aucune opération pour l'instant. Elles arrivent avec la prochaine synchro du dimanche.</p>
-          </div>
-        ) : (
-          <>
-            <div className="fade-up" style={CS}>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 16 }}>
-                {v.weeks.map((w) => (
-                  <button key={w} className="btn-press" onClick={() => setSem(w)} style={chip(w === week)}>
-                    {weekRange(w)}
-                  </button>
-                ))}
-                <select value={compte} onChange={(e) => setCompte(e.target.value)} aria-label="Compte" style={{ ...chip(!!compte), marginLeft: "auto", maxWidth: "100%" }}>
-                  <option value="">Tous les comptes</option>
-                  {comptes.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-              <h3 style={{ ...H3, fontSize: 18 }}>Semaine du {dayLong(week)} au {dayLong(addDays(week, 6))}</h3>
-              <p style={{ fontSize: 12, color: C.muted, margin: "6px 0 18px", lineHeight: 1.6 }}>
-                Chaque opération de tes comptes, de ceux d'Ophélie et des comptes communs{compte ? `, filtrée sur ${compte}` : ""}. Les virements entre vos comptes et les mouvements des placements sont mis à part.
-              </p>
-              <div className="grid-kpi">
-                <Kpi i={0} label={NATURES.quotidien.label} value={eur(tot.quotidien)} sub={`${tot.n.quotidien} opération${tot.n.quotidien > 1 ? "s" : ""}${totPrev ? ` · ${signed(vsPrev)} par rapport à la semaine d'avant (${eur(totPrev.quotidien)})` : ""}`} color={NATURES.quotidien.color} />
-                <Kpi i={1} label={NATURES.charges.label} value={eur(tot.charges)} sub={`${tot.n.charges} opération${tot.n.charges > 1 ? "s" : ""} · prêt, factures, impôts, frais, virements à des tiers`} color={NATURES.charges.color} />
-                <Kpi i={2} label={NATURES.epargne.label} value={eur(tot.epargne)} sub={`${tot.n.epargne} opération${tot.n.epargne > 1 ? "s" : ""} · ${tot.epargne < 0 ? `plus retiré que versé : ${eur(-tot.epargne)} repris sur l'épargne` : "versé sur l'épargne et les placements, moins ce qui en est revenu"}`} color={tot.epargne < 0 ? C.orange : NATURES.epargne.color} />
-                <Kpi i={3} label={NATURES.entrees.label} value={eur(tot.entrees)} sub={`${tot.n.entrees} opération${tot.n.entrees > 1 ? "s" : ""} · salaires, remboursements, virements reçus`} color={NATURES.entrees.color} />
-              </div>
-            </div>
-
-            <div className="fade-up" style={CS}>
-              <h3 style={{ ...H3, fontSize: 18 }}>Où est parti l'argent</h3>
-              <p style={{ fontSize: 12, color: C.muted, margin: "6px 0 16px" }}>
-                {eur(totalSorties)} de sorties cette semaine, classées par poste. Touche un poste pour voir ses opérations.
-              </p>
-              {postes.length === 0 ? (
-                <p style={{ fontSize: 13, color: C.muted }}>Aucune sortie sur cette semaine.</p>
-              ) : (
-                <div>
-                  {postes.map((p) => {
-                    const isOpen = open.has(p.key);
-                    return (
-                      <div key={p.key} style={{ borderTop: `1px solid ${C.soft}` }}>
-                        <button
-                          onClick={() => toggle(p.key)}
-                          aria-expanded={isOpen}
-                          className="row-hover"
-                          style={{ display: "grid", gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1fr) auto", gap: 12, alignItems: "center", width: "100%", padding: "10px 4px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", font: "inherit", color: C.ink }}
-                        >
-                          <span style={{ minWidth: 0 }}>
-                            <span style={{ fontSize: 13, fontWeight: 600 }}>{isOpen ? "▾" : "▸"} {p.label}</span>
-                            <span style={{ display: "block", fontSize: 11, color: C.muted, marginLeft: 14 }}>
-                              {p.rows.length} opération{p.rows.length > 1 ? "s" : ""}
-                              {p.nature === "charges" ? " · hors quotidien" : ""}
-                              {p.sansSousCat ? " · pas encore de sous-catégorie" : ""}
-                            </span>
-                          </span>
-                          <span style={{ height: 8, background: C.soft, borderRadius: 4, overflow: "hidden" }}>
-                            <span style={{ display: "block", width: `${(Math.max(p.total, 0) / maxPoste) * 100}%`, height: "100%", background: NATURES[p.nature].color, borderRadius: 4 }} />
-                          </span>
-                          <span style={{ fontSize: 13, fontWeight: 700, textAlign: "right", minWidth: 72 }}>
-                            {eur(p.total)}
-                            <span style={{ display: "block", fontSize: 11, color: C.muted, fontWeight: 400 }}>{totalSorties > 0 ? pct(p.total / totalSorties) : "—"}</span>
-                          </span>
-                        </button>
-                        {isOpen && (
-                          <div style={{ padding: "0 4px 10px 18px" }}>
-                            {p.rows.map((t) => (
-                              <div key={t.cle} style={{ display: "grid", gridTemplateColumns: "auto minmax(0,1fr) auto", gap: 12, fontSize: 12, padding: "5px 0", borderTop: `1px dashed ${C.soft}` }}>
-                                <span style={{ color: C.muted, whiteSpace: "nowrap" }}>{dayShort(t.date)}</span>
-                                <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
-                                  {t.libelle}
-                                  <span style={{ color: C.muted }}> · {t.compte}</span>
-                                </span>
-                                <span style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{money(t.montant)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {sansSousCat.length > 0 && (
-                <Note>
-                  {sansSousCat.length} sortie{sansSousCat.length > 1 ? "s" : ""} sur {sorties.length} n'ont encore qu'une catégorie générale de la banque. Pour les ranger plus finement, demande à Claude, dans le projet Organisation Famille, de créer une règle Finary. Elle reclasse le passé et les opérations à venir, visibles ici après la synchro du dimanche.
-                </Note>
-              )}
-            </div>
-
-            <div className="fade-up" style={CS}>
-              <h3 style={{ ...H3, fontSize: 18 }}>Toutes les opérations</h3>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", margin: "12px 0 14px" }}>
-                {VUES.map(([k, l, ns]) => {
-                  const n = cur.filter((t) => ns.includes(t.nature)).length;
-                  return (
-                    <button key={k} className="btn-press" onClick={() => setVue(k)} style={chip(vue === k)}>
-                      {l} <span style={{ color: C.muted }}>{n}</span>
-                    </button>
-                  );
-                })}
-                <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Chercher un libellé" aria-label="Chercher un libellé" style={{ ...chip(false), flex: "1 1 180px", minWidth: 0, cursor: "text" }} />
-              </div>
-              <div role="list">
-                {liste.map((t) => (
-                  <div key={t.cle} role="listitem" className="row-hover" style={{ display: "grid", gridTemplateColumns: "64px minmax(0,1fr) auto", gap: 12, alignItems: "baseline", padding: "10px 4px", borderTop: `1px solid ${C.soft}` }}>
-                    <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap" }}>{dayShort(t.date)}</span>
-                    <span style={{ minWidth: 0 }}>
-                      <span style={{ display: "block", fontSize: 13, fontWeight: 600, overflowWrap: "anywhere" }}>{t.libelle}</span>
-                      <span style={{ display: "block", fontSize: 11, color: C.muted, marginTop: 2, overflowWrap: "anywhere" }}>
-                        {posteLabel(t)} · <span style={{ color: NATURES[t.nature].color }}>{NATURES[t.nature].label}</span> · {t.compte}
-                      </span>
-                    </span>
-                    <span style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", color: t.montant > 0 ? C.green : C.ink }}>{money(t.montant)}</span>
-                  </div>
-                ))}
-                {liste.length === 0 && <p style={{ fontSize: 13, color: C.muted, textAlign: "center", padding: 12 }}>Aucune opération pour ce filtre.</p>}
-              </div>
-              <Note>
-                Montants tels que Finary les donne, part du foyer comprise. « Mouvements internes » regroupe les opérations que le budget Finary met de côté et celles des livrets, PEA, assurances vie et autres placements. Les banques transmettent certaines opérations avec un à trois jours de retard : les 4 semaines sont relues chaque dimanche.
-              </Note>
-            </div>
-          </>
-        )}
-      </div>
-    </Gate>
-  );
-}
-
-const GROUP_ORDER = ["checking", "saving", "investment", "crypto", "real-estate", "loan", "credit", "startup", "other"];
-
-export function ComptesTab({ finary }) {
-  const d = finary.data;
-  const [who, setWho] = useState("Foyer");
-  const syncIso = synthese(d, "derniere_synchro").texte;
-  const v = useMemo(() => {
-    if (!d) return null;
-    const accs = d.comptes
-      .map((a) => ({ ...a, owners: parseOwners(a.titulaires) }))
-      .map((a) => {
-        const share = who === "Foyer" ? 1 : a.owners.find((o) => o.name === who)?.share || 0;
-        return { ...a, share, part: (a.solde_eur || 0) * share };
-      })
-      .filter((a) => a.share > 0);
-    const groups = GROUP_ORDER.map((t) => ({ type: t, rows: accs.filter((a) => a.type === t).sort((x, y) => Math.abs(y.part) - Math.abs(x.part)) })).filter((g) => g.rows.length);
-    const tot = (types) => sum(accs.filter((a) => types.includes(a.type)), (a) => a.part);
-    const positions = d.positions || [];
-    const byAccount = [...new Set(positions.map((p) => p.compte))].map((compte) => ({ compte, rows: positions.filter((p) => p.compte === compte).sort((a, b) => (b.valeur || 0) - (a.valeur || 0)) }));
-    return { groups, liquid: tot(["checking", "saving"]), placements: tot(["investment", "crypto"]), immo: tot(["real-estate"]), dettes: tot(["loan", "credit"]), byAccount };
-  }, [d, who]);
-  const showPositions = who === "Foyer" || who === "Lionel";
-
-  return (
-    <Gate finary={finary}>
-      {v && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          <TabHeader title="Comptes et placements" finary={finary} />
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            {["Foyer", ...PEOPLE].map((p) => (
-              <button key={p} className="btn-press" style={chip(who === p)} onClick={() => setWho(p)}>{p}</button>
-            ))}
-          </div>
-
-          <div className="grid-kpi">
-            <Kpi i={0} label="Liquidités" value={eur(v.liquid)} sub="Comptes courants et livrets" color={C.teal} />
-            <Kpi i={1} label="Placements" value={eur(v.placements)} sub="PEA, assurances vie, PER, PEE, crypto" color={C.violet} />
-            <Kpi i={2} label="Immobilier" value={eur(v.immo)} color={C.blue} />
-            <Kpi i={3} label="Dettes" value={eur(v.dettes)} color={C.red} />
-          </div>
-          <Note>{who === "Foyer" ? "Montants à 100 % de chaque compte." : `Montants à la part de ${who} sur chaque compte.`} Ces totaux additionnent les comptes listés. Le total officiel Finary est dans l'onglet Patrimoine.</Note>
-
-          {v.groups.map((g) => (
-            <div key={g.type} className="fade-up" style={CS}>
-              <div className="section-header" style={{ marginBottom: 12 }}>
-                <h3 style={{ ...H3, fontSize: 18 }}>{TYPE_LABEL[g.type] || g.type}</h3>
-                <span style={{ fontSize: 13, fontWeight: 700 }}>{eur(sum(g.rows, (a) => a.part))}</span>
-              </div>
-              <div className="table-scroll">
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 620 }}>
-                  <thead>
-                    <tr>
-                      <th style={TH}>Compte</th>
-                      <th style={TH}>Titulaire</th>
-                      <th style={{ ...TH, textAlign: "right" }}>Solde</th>
-                      {who !== "Foyer" && <th style={{ ...TH, textAlign: "right" }}>Part</th>}
-                      <th style={{ ...TH, textAlign: "right" }}>Mise à jour</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {g.rows.map((a) => {
-                      const age = a.maj && syncIso ? daysBetween(a.maj, syncIso) : null;
-                      const stale = a.etablissement && a.type !== "real-estate" && age != null && age > 7;
-                      return (
-                        <tr key={a.cle} className="row-hover">
-                          <td style={TD}>
-                            <div style={{ fontWeight: 600 }}>{a.nom}</div>
-                            <div style={{ fontSize: 11, color: C.muted }}>{a.etablissement || "Saisie manuelle"}{a.rendement ? ` · rémunéré ${num(a.rendement, 2)} %` : ""}</div>
-                          </td>
-                          <td style={{ ...TD, fontSize: 12, color: C.muted }}>{a.owners.map((o) => (o.share < 1 ? `${o.name} ${pct(o.share)}` : o.name)).join(", ")}</td>
-                          <td style={{ ...TD, textAlign: "right", fontWeight: 600, color: a.type === "loan" || a.solde_eur < 0 ? C.red : C.ink }}>
-                            {a.devise && a.devise !== "EUR" ? (
-                              <>{money(a.solde, a.devise)}<div style={{ fontSize: 11, color: C.muted, fontWeight: 400 }}>{money(a.solde_eur)}</div></>
-                            ) : money(a.solde_eur)}
-                          </td>
-                          {who !== "Foyer" && <td style={{ ...TD, textAlign: "right" }}>{money(a.part)}</td>}
-                          <td style={{ ...TD, textAlign: "right", fontSize: 12, color: stale ? C.orange : C.muted, whiteSpace: "nowrap" }}>
-                            {frDate(a.maj)}{stale ? " · à vérifier" : ""}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))}
-
-          {showPositions && (
-            <div className="fade-up" style={CS}>
-              <h3 style={{ ...H3, fontSize: 18 }}>Lignes détenues</h3>
-              <p style={{ fontSize: 12, color: C.muted, marginTop: 4, marginBottom: 16 }}>
-                Comptes de Lionel uniquement. Finary ne donne pas le détail des lignes pour les comptes d'Ophélie et des filles.
-              </p>
-              {v.byAccount.map(({ compte, rows }) => {
-                const cur = rows[0]?.devise || "EUR";
-                const sameCur = rows.every((r) => (r.devise || "EUR") === cur);
-                const totVal = sum(rows, (r) => r.valeur);
-                const totCost = sum(rows.filter((r) => r.pru != null), (r) => r.quantite * r.pru);
-                const totLat = sum(rows.filter((r) => r.pru != null), (r) => r.valeur - r.quantite * r.pru);
-                return (
-                  <div key={compte} style={{ marginBottom: 22 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700 }}>{compte}</span>
-                      {sameCur && (
-                        <span style={{ fontSize: 12, color: C.muted }}>
-                          {money(totVal, cur)} · <b style={{ color: totLat >= 0 ? C.green : C.red }}>{totLat >= 0 ? "+" : ""}{money(totLat, cur)}</b>{totCost > 0 ? ` (${totLat >= 0 ? "+" : ""}${pct(totLat / totCost, 1)})` : ""}
-                        </span>
-                      )}
-                    </div>
-                    <div className="table-scroll">
-                      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 680 }}>
-                        <thead>
-                          <tr>
-                            <th style={TH}>Ligne</th>
-                            <th style={{ ...TH, textAlign: "right" }}>Quantité</th>
-                            <th style={{ ...TH, textAlign: "right" }}>Prix de revient</th>
-                            <th style={{ ...TH, textAlign: "right" }}>Valeur</th>
-                            <th style={{ ...TH, textAlign: "right" }}>Plus-value latente</th>
-                            <th style={{ ...TH, textAlign: "right" }}>Frais / an</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((p) => {
-                            const cost = p.pru != null ? p.quantite * p.pru : null;
-                            const lat = cost != null ? p.valeur - cost : null;
-                            return (
-                              <tr key={p.cle} className="row-hover">
-                                <td style={TD}>
-                                  <div style={{ fontWeight: 600 }}>{p.nom}</div>
-                                  <div style={{ fontSize: 11, color: C.muted }}>{[p.symbole, p.isin].filter(Boolean).join(" · ")}</div>
-                                </td>
-                                <td style={{ ...TD, textAlign: "right" }}>{num(p.quantite, 6)}</td>
-                                <td style={{ ...TD, textAlign: "right" }}>{p.pru != null ? money(p.pru, p.devise) : "—"}</td>
-                                <td style={{ ...TD, textAlign: "right", fontWeight: 700 }}>{money(p.valeur, p.devise)}</td>
-                                <td style={{ ...TD, textAlign: "right", fontWeight: 600, color: lat == null ? C.muted : lat >= 0 ? C.green : C.red }}>
-                                  {lat == null ? "—" : `${lat >= 0 ? "+" : ""}${money(lat, p.devise)}`}
-                                  {lat != null && cost > 0 && <div style={{ fontSize: 11, fontWeight: 400 }}>{lat >= 0 ? "+" : ""}{pct(lat / cost, 1)}</div>}
-                                </td>
-                                <td style={{ ...TD, textAlign: "right", color: C.muted }}>{p.frais != null ? pct(p.frais, 2) : "—"}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                );
-              })}
-              <Note>Plus-value latente calculée ici : valeur actuelle moins quantité × prix de revient Finary. Les lignes Kraken sont en dollars.</Note>
-            </div>
-          )}
-        </div>
-      )}
-    </Gate>
-  );
-}
 
 // ─── Contexte pour l'assistant IA ──────────────────────────────────────────
 export function finaryContext(d) {
@@ -1320,17 +898,24 @@ export function finaryContext(d) {
     if (groups) {
       s += `Commerçants suivis la même semaine (semaine / moyenne hebdo 12 semaines) : ${groups.flatMap((g) => g.rows).map((r) => `${r.marchand} ${eur(r.depenses)} / ${eur(r.moyenne_12s)}`).join(", ")}.\n`;
     }
-    const ops = operationsView(d.transactions || []);
-    if (ops.weeks.length) {
-      s += `\nOPÉRATIONS BANCAIRES UNE À UNE (classement Finary : catégorie › sous-catégorie), semaines du dimanche au samedi, sans les mouvements internes ni l'épargne. Format : date, libellé, montant (négatif = sortie), classement, compte.\n`;
-      ops.weeks.forEach((wk) => {
-        const rows = ops.tx.filter((t) => t.semaine === wk && t.nature !== "interne" && t.nature !== "epargne").sort((a, b) => a.date.localeCompare(b.date));
-        const t = totals(ops.tx.filter((x) => x.semaine === wk));
+    const A = analyser(d.transactions || [], d.comptes || []);
+    const weeks = [...new Set(A.rows.map((t) => t.semaine).filter(Boolean))].sort().reverse().slice(0, 4);
+    if (weeks.length) {
+      s += `\nOPÉRATIONS BANCAIRES UNE À UNE (classement Finary : catégorie › sous-catégorie), semaines du dimanche au samedi, sans les virements entre vos comptes ni l'épargne. Format : date, libellé, montant (négatif = sortie), classement, compte, titulaire. Les virements vers Alizée, Noémie et Camille comptent comme mis de côté : ils vont sur leur livret A, leur compte, leur assurance vie ou leur CTO Trade Republic.\n`;
+      weeks.forEach((wk) => {
+        const rows = A.rows.filter((t) => t.semaine === wk);
+        const t = totaux(rows);
         s += `Semaine du ${dayLong(wk)} au ${dayLong(addDays(wk, 6))} : quotidien ${eur(t.quotidien)}, charges et autres sorties ${eur(t.charges)}, mis de côté ${eur(t.epargne)}, entrées ${eur(t.entrees)}.\n`;
-        s += rows.map((x) => `${x.date.slice(8, 10)}/${x.date.slice(5, 7)} ${x.libelle} ${money(x.montant)} [${posteLabel(x)}${x.nature === "charges" ? ", hors quotidien" : ""}] (${x.compte})`).join(" | ") + "\n";
+        s += rows.filter((x) => x.nature !== "interne" && x.nature !== "epargne").sort((x, y) => x.date.localeCompare(y.date)).map((x) => `${x.date.slice(8, 10)}/${x.date.slice(5, 7)} ${x.libelle} ${money(x.montant)} [${posteLabel(x)}${x.nature === "charges" ? ", hors quotidien" : ""}] (${x.compte}, ${x.personne || "titulaire inconnu"})`).join(" | ") + "\n";
       });
+      const mv = mouvements(A.rows.filter((t) => weeks.includes(t.semaine)));
+      const agg = new Map();
+      for (const m of mv) agg.set(`${libelleNoeud(m.de)} vers ${libelleNoeud(m.vers)}`, (agg.get(`${libelleNoeud(m.de)} vers ${libelleNoeud(m.vers)}`) || 0) + m.montant);
+      if (agg.size) s += `Virements entre les comptes de la famille sur ces 4 semaines (qui verse à qui) : ${[...agg.entries()].sort((x, y) => y[1] - x[1]).map(([k, v]) => `${k} ${eur(v)}`).join(", ")}.\n`;
+      const filles = FILLES.map((f) => [f, sum(mv.filter((m) => m.vers === f), (m) => m.montant)]).filter(([, v]) => v > 0);
+      if (filles.length) s += `Versé à chaque fille sur ces 4 semaines : ${filles.map(([f, v]) => `${f} ${eur(v)}`).join(", ")}.\n`;
     }
-    s += `Limites : ${ops.weeks.length ? "le détail des opérations ne couvre que les 4 dernières semaines, et la sous-catégorie n'existe que pour les commerçants couverts par une règle Finary" : "Finary ne donne ni le libellé des opérations ni les sous-catégories"}. Les mois avant juin 2026 semblent incomplets, donc les moyennes sur 12 mois sont un peu basses. Le taux d'épargne affiché par Finary compte les placements comme des dépenses : ne le cite pas comme le taux d'épargne réel.\n`;
+    s += `Limites : ${weeks.length ? "le détail des opérations ne couvre que les 4 dernières semaines, et la sous-catégorie n'existe que pour les commerçants couverts par une règle Finary" : "Finary ne donne ni le libellé des opérations ni les sous-catégories"}. Les mois avant juin 2026 semblent incomplets, donc les moyennes sur 12 mois sont un peu basses. Le taux d'épargne affiché par Finary compte les placements comme des dépenses : ne le cite pas comme le taux d'épargne réel.\n`;
     return s;
   } catch {
     return "";

@@ -20,7 +20,10 @@ const TABLES = {
   semaine: "Finary_Semaine",
   marchands: "Finary_Marchands",
   transactions: "Finary_Transactions",
+  historique: "Finary_Historique",
 };
+// Tables récentes : si elles manquent encore dans Airtable, le site continue sans elles.
+const FACULTATIVES = new Set(["historique"]);
 
 // Le site n'affiche que les semaines récentes. Tout l'historique reste dans Airtable.
 const FILTRES = {
@@ -85,7 +88,12 @@ async function lireAirtable() {
   async function lecteur() {
     while (next < entries.length) {
       const [key, table] = entries[next++];
-      lu[key] = await fetchTable(base, token, table, FILTRES[key]);
+      try {
+        lu[key] = await fetchTable(base, token, table, FILTRES[key]);
+      } catch (e) {
+        if (!FACULTATIVES.has(key)) throw e;
+        lu[key] = [];
+      }
     }
   }
   await Promise.all(Array.from({ length: PARALLELE }, lecteur));
@@ -93,7 +101,7 @@ async function lireAirtable() {
 }
 
 // La semaine fait partie de la clé : le premier passage après le dimanche 7 h relit Airtable.
-const lireEnCache = unstable_cache(async (_semaine) => lireAirtable(), ["finary-airtable-v3"], {
+const lireEnCache = unstable_cache(async (_semaine) => lireAirtable(), ["finary-airtable-v4"], {
   revalidate: CACHE_SECONDS,
   tags: [CACHE_TAG],
 });
