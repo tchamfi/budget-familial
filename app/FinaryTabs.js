@@ -842,6 +842,270 @@ export function BudgetReelTab({ finary }) {
 }
 
 // ─── Onglet Comptes & placements ────────────────────────────────────────────
+// ─── Onglet Opérations ──────────────────────────────────────────────────────
+// Les opérations une à une des 4 dernières semaines (dimanche au samedi), classées par Finary.
+// Le classement vient de Finary : catégories de la banque, puis règles Finary (sous-catégories).
+const SOUS_CAT_FR = {
+  groceries: "Courses", dining_out: "Restaurants", fast_food: "Restauration rapide et livraison", coffee_shop: "Cafés", snacks: "En-cas", alcohol_and_bars: "Bars",
+  fuel: "Carburant", repairs: "Entretien et réparations", public_transport: "Transports en commun", taxi: "Taxi et VTC", parking: "Stationnement", insurance: "Assurance auto",
+  tolls: "Péages", train_tickets: "Train", plane_tickets: "Avion", car_rental: "Location de voiture", car_wash: "Lavage",
+  electricity: "Électricité", water: "Eau", internet: "Internet", mobile_phone: "Téléphone mobile", heating: "Chauffage", trash_and_recycling: "Ordures", bills_subscriptions: "Abonnements et contrats",
+  subscriptions: "Abonnements", sports_and_recreation: "Sport", movie_and_theater: "Cinéma et spectacles", hobbies: "Loisirs", vacations: "Vacances", art_and_museum: "Musées",
+  medication: "Pharmacie", doctor_visit: "Médecin", dentist_visit: "Dentiste", health_insurance: "Mutuelle", optician: "Opticien", medical_equipment: "Matériel médical",
+  clothing: "Vêtements", personal_care: "Soins et beauté", childcare: "Garde d'enfants", education: "Scolarité", tuition: "Frais de scolarité", personal_gifts: "Cadeaux",
+  pets: "Animaux", supplies: "Maison", rent: "Loyer", tobacco: "Tabac", student_housing: "Logement étudiant",
+  bank_fees: "Frais bancaires", late_fees: "Pénalités", service_charge: "Frais de service",
+  internal_transfer: "Virements internes", external_transfer: "Virements à des tiers", gifts_transfer: "Dons et cadeaux", bill_payment: "Paiement de factures", international_transfer: "Transferts internationaux",
+  online_services: "Services en ligne", professional_services: "Services pro", withdrawal: "Retraits", income_taxes: "Impôt sur le revenu", property_taxes: "Taxe foncière", social_contributions: "Cotisations sociales",
+};
+// Comptes d'épargne et de placement : ce qui y entre ou en sort n'est pas une dépense.
+const COMPTE_EPARGNE = /\b(PEA|LIVRET|LDD|LINXEA|PORTFOLIO|PER|CTO|KRAKEN|CRYPTO|ASSURANCE VIE|PLAN EPARGNE)\b/i;
+const NATURES = {
+  quotidien: { label: "Dépenses du quotidien", color: C.ink },
+  charges: { label: "Charges et autres sorties", color: C.orange },
+  epargne: { label: "Mis de côté", color: C.green },
+  entrees: { label: "Entrées", color: C.blue },
+  interne: { label: "Mouvements internes", color: C.muted },
+};
+const VUES = [
+  ["sorties", "Sorties", ["quotidien", "charges"]],
+  ["quotidien", "Quotidien", ["quotidien"]],
+  ["charges", "Charges", ["charges"]],
+  ["epargne", "Mis de côté", ["epargne"]],
+  ["entrees", "Entrées", ["entrees"]],
+  ["interne", "Mouvements internes", ["interne"]],
+  ["tout", "Tout", ["quotidien", "charges", "epargne", "entrees", "interne"]],
+];
+function natureOf(t) {
+  if (t.exclue || COMPTE_EPARGNE.test(t.compte || "") || t.sous_categorie === "internal_transfer") return "interne";
+  if (t.categorie === "investment") return "epargne";
+  if ((t.montant || 0) >= 0) return "entrees";
+  return HORS_QUOTIDIEN.has(t.categorie) ? "charges" : "quotidien";
+}
+// Finary ne donne pas toujours le nom français d'une sous-catégorie : on part du nôtre, puis du sien.
+const sousCatLabel = (t) => (t.sous_categorie ? SOUS_CAT_FR[t.sous_categorie] || t.sous_categorie_libelle || t.sous_categorie : null);
+const posteLabel = (t) => {
+  const cat = t.categorie_libelle || t.categorie || "Sans catégorie";
+  const sc = sousCatLabel(t);
+  return sc ? `${cat} › ${sc}` : cat;
+};
+const weekRange = (debut) => {
+  const d = new Date(`${debut}T12:00:00`);
+  const f = new Date(d.getTime() + 6 * 86400000);
+  const short = (x) => `${x.getDate() === 1 ? "1er" : x.getDate()} ${MOIS_C[x.getMonth()]}`;
+  return `${short(d)} au ${short(f)}`;
+};
+const addDays = (iso, n) => {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+const dayShort = (iso) => {
+  const d = new Date(`${iso}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : `${JOURS[d.getDay()].slice(0, 3)}. ${d.getDate()}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+
+function operationsView(rows = []) {
+  const weeks = [...new Set(rows.map((t) => t.semaine).filter(Boolean))].sort().reverse().slice(0, 4);
+  const tx = rows
+    .filter((t) => weeks.includes(t.semaine))
+    .map((t) => ({ ...t, montant: +t.montant || 0, nature: natureOf(t) }));
+  return { weeks, tx };
+}
+function totals(tx) {
+  const by = (n) => tx.filter((t) => t.nature === n);
+  return {
+    quotidien: -sum(by("quotidien"), (t) => t.montant),
+    charges: -sum(by("charges"), (t) => t.montant),
+    epargne: -sum(by("epargne"), (t) => t.montant),
+    entrees: sum(by("entrees"), (t) => t.montant),
+    n: Object.fromEntries(Object.keys(NATURES).map((k) => [k, by(k).length])),
+  };
+}
+function groupPostes(tx) {
+  const m = new Map();
+  for (const t of tx) {
+    const key = `${t.nature}|${t.categorie}|${t.sous_categorie || ""}`;
+    if (!m.has(key)) m.set(key, { key, nature: t.nature, label: posteLabel(t), sansSousCat: !t.sous_categorie, rows: [], total: 0 });
+    const g = m.get(key);
+    g.rows.push(t);
+    g.total += -t.montant;
+  }
+  return [...m.values()]
+    .map((g) => ({ ...g, rows: g.rows.sort((a, b) => b.date.localeCompare(a.date) || a.montant - b.montant) }))
+    .sort((a, b) => b.total - a.total);
+}
+
+export function OperationsTab({ finary }) {
+  const d = finary.data;
+  const v = useMemo(() => operationsView(d?.transactions || []), [d]);
+  const [sem, setSem] = useState(null);
+  const [vue, setVue] = useState("sorties");
+  const [compte, setCompte] = useState("");
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(() => new Set());
+  const week = sem && v.weeks.includes(sem) ? sem : v.weeks[0];
+  const prevWeek = v.weeks[v.weeks.indexOf(week) + 1] || null;
+  const comptes = useMemo(() => [...new Set(v.tx.map((t) => t.compte).filter(Boolean))].sort(), [v]);
+  const ofWeek = (w) => v.tx.filter((t) => t.semaine === w && (!compte || t.compte === compte));
+  const cur = week ? ofWeek(week) : [];
+  const tot = totals(cur);
+  const totPrev = prevWeek ? totals(ofWeek(prevWeek)) : null;
+  const sorties = cur.filter((t) => t.nature === "quotidien" || t.nature === "charges");
+  const postes = groupPostes(sorties);
+  const maxPoste = Math.max(1, ...postes.map((p) => p.total));
+  const totalSorties = tot.quotidien + tot.charges;
+  const sansSousCat = sorties.filter((t) => !t.sous_categorie);
+  const natures = VUES.find(([k]) => k === vue)[2];
+  const needle = q.trim().toLowerCase();
+  const liste = cur
+    .filter((t) => natures.includes(t.nature))
+    .filter((t) => !needle || (t.libelle || "").toLowerCase().includes(needle) || posteLabel(t).toLowerCase().includes(needle))
+    .sort((a, b) => b.date.localeCompare(a.date) || a.montant - b.montant);
+  const toggle = (k) =>
+    setOpen((s) => {
+      const n = new Set(s);
+      n.has(k) ? n.delete(k) : n.add(k);
+      return n;
+    });
+  const vsPrev = totPrev ? deltaPct(tot.quotidien, totPrev.quotidien) : null;
+
+  return (
+    <Gate finary={finary}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <TabHeader title="Opérations" finary={finary} />
+        {!week ? (
+          <div className="fade-up" style={CS}>
+            <p style={{ fontSize: 14, color: C.muted, margin: 0 }}>Aucune opération pour l'instant. Elles arrivent avec la prochaine synchro du dimanche.</p>
+          </div>
+        ) : (
+          <>
+            <div className="fade-up" style={CS}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 16 }}>
+                {v.weeks.map((w) => (
+                  <button key={w} className="btn-press" onClick={() => setSem(w)} style={chip(w === week)}>
+                    {weekRange(w)}
+                  </button>
+                ))}
+                <select value={compte} onChange={(e) => setCompte(e.target.value)} aria-label="Compte" style={{ ...chip(!!compte), marginLeft: "auto", maxWidth: "100%" }}>
+                  <option value="">Tous les comptes</option>
+                  {comptes.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <h3 style={{ ...H3, fontSize: 18 }}>Semaine du {dayLong(week)} au {dayLong(addDays(week, 6))}</h3>
+              <p style={{ fontSize: 12, color: C.muted, margin: "6px 0 18px", lineHeight: 1.6 }}>
+                Chaque opération de tes comptes, de ceux d'Ophélie et des comptes communs{compte ? `, filtrée sur ${compte}` : ""}. Les virements entre vos comptes et les mouvements des placements sont mis à part.
+              </p>
+              <div className="grid-kpi">
+                <Kpi i={0} label={NATURES.quotidien.label} value={eur(tot.quotidien)} sub={`${tot.n.quotidien} opération${tot.n.quotidien > 1 ? "s" : ""}${totPrev ? ` · ${signed(vsPrev)} par rapport à la semaine d'avant (${eur(totPrev.quotidien)})` : ""}`} color={NATURES.quotidien.color} />
+                <Kpi i={1} label={NATURES.charges.label} value={eur(tot.charges)} sub={`${tot.n.charges} opération${tot.n.charges > 1 ? "s" : ""} · prêt, factures, impôts, frais, virements à des tiers`} color={NATURES.charges.color} />
+                <Kpi i={2} label={NATURES.epargne.label} value={eur(tot.epargne)} sub={`${tot.n.epargne} opération${tot.n.epargne > 1 ? "s" : ""} · ${tot.epargne < 0 ? `plus retiré que versé : ${eur(-tot.epargne)} repris sur l'épargne` : "versé sur l'épargne et les placements, moins ce qui en est revenu"}`} color={tot.epargne < 0 ? C.orange : NATURES.epargne.color} />
+                <Kpi i={3} label={NATURES.entrees.label} value={eur(tot.entrees)} sub={`${tot.n.entrees} opération${tot.n.entrees > 1 ? "s" : ""} · salaires, remboursements, virements reçus`} color={NATURES.entrees.color} />
+              </div>
+            </div>
+
+            <div className="fade-up" style={CS}>
+              <h3 style={{ ...H3, fontSize: 18 }}>Où est parti l'argent</h3>
+              <p style={{ fontSize: 12, color: C.muted, margin: "6px 0 16px" }}>
+                {eur(totalSorties)} de sorties cette semaine, classées par poste. Touche un poste pour voir ses opérations.
+              </p>
+              {postes.length === 0 ? (
+                <p style={{ fontSize: 13, color: C.muted }}>Aucune sortie sur cette semaine.</p>
+              ) : (
+                <div>
+                  {postes.map((p) => {
+                    const isOpen = open.has(p.key);
+                    return (
+                      <div key={p.key} style={{ borderTop: `1px solid ${C.soft}` }}>
+                        <button
+                          onClick={() => toggle(p.key)}
+                          aria-expanded={isOpen}
+                          className="row-hover"
+                          style={{ display: "grid", gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1fr) auto", gap: 12, alignItems: "center", width: "100%", padding: "10px 4px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", font: "inherit", color: C.ink }}
+                        >
+                          <span style={{ minWidth: 0 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600 }}>{isOpen ? "▾" : "▸"} {p.label}</span>
+                            <span style={{ display: "block", fontSize: 11, color: C.muted, marginLeft: 14 }}>
+                              {p.rows.length} opération{p.rows.length > 1 ? "s" : ""}
+                              {p.nature === "charges" ? " · hors quotidien" : ""}
+                              {p.sansSousCat ? " · pas encore de sous-catégorie" : ""}
+                            </span>
+                          </span>
+                          <span style={{ height: 8, background: C.soft, borderRadius: 4, overflow: "hidden" }}>
+                            <span style={{ display: "block", width: `${(Math.max(p.total, 0) / maxPoste) * 100}%`, height: "100%", background: NATURES[p.nature].color, borderRadius: 4 }} />
+                          </span>
+                          <span style={{ fontSize: 13, fontWeight: 700, textAlign: "right", minWidth: 72 }}>
+                            {eur(p.total)}
+                            <span style={{ display: "block", fontSize: 11, color: C.muted, fontWeight: 400 }}>{totalSorties > 0 ? pct(p.total / totalSorties) : "—"}</span>
+                          </span>
+                        </button>
+                        {isOpen && (
+                          <div style={{ padding: "0 4px 10px 18px" }}>
+                            {p.rows.map((t) => (
+                              <div key={t.cle} style={{ display: "grid", gridTemplateColumns: "auto minmax(0,1fr) auto", gap: 12, fontSize: 12, padding: "5px 0", borderTop: `1px dashed ${C.soft}` }}>
+                                <span style={{ color: C.muted, whiteSpace: "nowrap" }}>{dayShort(t.date)}</span>
+                                <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+                                  {t.libelle}
+                                  <span style={{ color: C.muted }}> · {t.compte}</span>
+                                </span>
+                                <span style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{money(t.montant)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {sansSousCat.length > 0 && (
+                <Note>
+                  {sansSousCat.length} sortie{sansSousCat.length > 1 ? "s" : ""} sur {sorties.length} n'ont encore qu'une catégorie générale de la banque. Pour les ranger plus finement, demande à Claude, dans le projet Organisation Famille, de créer une règle Finary. Elle reclasse le passé et les opérations à venir, visibles ici après la synchro du dimanche.
+                </Note>
+              )}
+            </div>
+
+            <div className="fade-up" style={CS}>
+              <h3 style={{ ...H3, fontSize: 18 }}>Toutes les opérations</h3>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", margin: "12px 0 14px" }}>
+                {VUES.map(([k, l, ns]) => {
+                  const n = cur.filter((t) => ns.includes(t.nature)).length;
+                  return (
+                    <button key={k} className="btn-press" onClick={() => setVue(k)} style={chip(vue === k)}>
+                      {l} <span style={{ color: C.muted }}>{n}</span>
+                    </button>
+                  );
+                })}
+                <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Chercher un libellé" aria-label="Chercher un libellé" style={{ ...chip(false), flex: "1 1 180px", minWidth: 0, cursor: "text" }} />
+              </div>
+              <div role="list">
+                {liste.map((t) => (
+                  <div key={t.cle} role="listitem" className="row-hover" style={{ display: "grid", gridTemplateColumns: "64px minmax(0,1fr) auto", gap: 12, alignItems: "baseline", padding: "10px 4px", borderTop: `1px solid ${C.soft}` }}>
+                    <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap" }}>{dayShort(t.date)}</span>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: "block", fontSize: 13, fontWeight: 600, overflowWrap: "anywhere" }}>{t.libelle}</span>
+                      <span style={{ display: "block", fontSize: 11, color: C.muted, marginTop: 2, overflowWrap: "anywhere" }}>
+                        {posteLabel(t)} · <span style={{ color: NATURES[t.nature].color }}>{NATURES[t.nature].label}</span> · {t.compte}
+                      </span>
+                    </span>
+                    <span style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", color: t.montant > 0 ? C.green : C.ink }}>{money(t.montant)}</span>
+                  </div>
+                ))}
+                {liste.length === 0 && <p style={{ fontSize: 13, color: C.muted, textAlign: "center", padding: 12 }}>Aucune opération pour ce filtre.</p>}
+              </div>
+              <Note>
+                Montants tels que Finary les donne, part du foyer comprise. « Mouvements internes » regroupe les opérations que le budget Finary met de côté et celles des livrets, PEA, assurances vie et autres placements. Les banques transmettent certaines opérations avec un à trois jours de retard : les 4 semaines sont relues chaque dimanche.
+              </Note>
+            </div>
+          </>
+        )}
+      </div>
+    </Gate>
+  );
+}
+
 const GROUP_ORDER = ["checking", "saving", "investment", "crypto", "real-estate", "loan", "credit", "startup", "other"];
 
 export function ComptesTab({ finary }) {
@@ -1056,7 +1320,17 @@ export function finaryContext(d) {
     if (groups) {
       s += `Commerçants suivis la même semaine (semaine / moyenne hebdo 12 semaines) : ${groups.flatMap((g) => g.rows).map((r) => `${r.marchand} ${eur(r.depenses)} / ${eur(r.moyenne_12s)}`).join(", ")}.\n`;
     }
-    s += `Limites : Finary ne donne ni le libellé des opérations ni les sous-catégories. Les mois avant juin 2026 semblent incomplets, donc les moyennes sur 12 mois sont un peu basses. Le taux d'épargne affiché par Finary compte les placements comme des dépenses : ne le cite pas comme le taux d'épargne réel.\n`;
+    const ops = operationsView(d.transactions || []);
+    if (ops.weeks.length) {
+      s += `\nOPÉRATIONS BANCAIRES UNE À UNE (classement Finary : catégorie › sous-catégorie), semaines du dimanche au samedi, sans les mouvements internes ni l'épargne. Format : date, libellé, montant (négatif = sortie), classement, compte.\n`;
+      ops.weeks.forEach((wk) => {
+        const rows = ops.tx.filter((t) => t.semaine === wk && t.nature !== "interne" && t.nature !== "epargne").sort((a, b) => a.date.localeCompare(b.date));
+        const t = totals(ops.tx.filter((x) => x.semaine === wk));
+        s += `Semaine du ${dayLong(wk)} au ${dayLong(addDays(wk, 6))} : quotidien ${eur(t.quotidien)}, charges et autres sorties ${eur(t.charges)}, mis de côté ${eur(t.epargne)}, entrées ${eur(t.entrees)}.\n`;
+        s += rows.map((x) => `${x.date.slice(8, 10)}/${x.date.slice(5, 7)} ${x.libelle} ${money(x.montant)} [${posteLabel(x)}${x.nature === "charges" ? ", hors quotidien" : ""}] (${x.compte})`).join(" | ") + "\n";
+      });
+    }
+    s += `Limites : ${ops.weeks.length ? "le détail des opérations ne couvre que les 4 dernières semaines, et la sous-catégorie n'existe que pour les commerçants couverts par une règle Finary" : "Finary ne donne ni le libellé des opérations ni les sous-catégories"}. Les mois avant juin 2026 semblent incomplets, donc les moyennes sur 12 mois sont un peu basses. Le taux d'épargne affiché par Finary compte les placements comme des dépenses : ne le cite pas comme le taux d'épargne réel.\n`;
     return s;
   } catch {
     return "";

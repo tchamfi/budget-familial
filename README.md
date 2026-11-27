@@ -22,11 +22,14 @@ Application de suivi budgétaire familial connectée à Airtable et alimentée p
 
 - **Patrimoine** : patrimoine net, répartition, évolution (un relevé par semaine), patrimoine de chacun avec ou sans la maison, objectifs Finary, prêt.
 - **Budget réel** : la semaine écoulée (dimanche au samedi) comparée à la semaine d'avant et à la moyenne des 12 dernières semaines, les commerçants suivis, les plafonds Finary du mois, puis revenus et dépenses réels par mois et par catégorie.
+- **Opérations** : les opérations une à une des 4 dernières semaines (dimanche au samedi), classées par poste (catégorie et sous-catégorie Finary). Quotidien, charges, épargne, entrées et mouvements internes sont séparés. Filtre par compte et recherche par libellé.
 - **Comptes** : tous les comptes par type et par personne, et les lignes détenues (comptes de Lionel).
 
-Le site relit Airtable une fois par semaine, à la première visite après le dimanche 7 h (heure de Paris), puis garde le résultat dans le cache de données de Next, commun à toutes les instances Vercel. Le bouton « Recharger » vide ce cache. Il ne lit que les 6 derniers mois de `Finary_Semaine` et les 5 dernières semaines de `Finary_Marchands`. L'historique complet reste dans Airtable.
+Le site relit Airtable une fois par semaine, à la première visite après le dimanche 7 h (heure de Paris), puis garde le résultat dans le cache de données de Next, commun à toutes les instances Vercel. Le bouton « Recharger » vide ce cache. Il ne lit que les 6 derniers mois de `Finary_Semaine` et les 5 dernières semaines de `Finary_Marchands` et de `Finary_Transactions`. L'historique complet reste dans Airtable.
 
 Les tables `Finary_*` de la base Airtable sont mises à jour chaque dimanche à 6 h par une tâche planifiée Claude. Ne pas les modifier à la main, sauf `Finary_Marchands_Suivis` : c'est la liste des commerçants suivis (nom affiché, texte recherché dans le libellé des opérations, groupe, case « actif »). Elle est prise en compte au passage suivant.
+
+`Finary_Transactions` reçoit les opérations une à une : la synchro relit les 4 dernières semaines chaque dimanche et garde 12 mois. Le classement vient de Finary. Pour le changer, crée une règle dans Finary (avec Claude ou dans l'app) : elle reclasse le passé, et le site l'affiche après la synchro suivante. La synchro ne fait que lire Finary.
 
 ## Lancer en local
 
